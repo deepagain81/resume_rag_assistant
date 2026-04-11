@@ -6,6 +6,6 @@ class RagService:
         cleaned_question = question.strip()
 
         return QueryResponse(
-            answer=f"Placeholder response for: {cleaned_question}",
+            answer=f"{cleaned_question}",
             source="stub",
         )
