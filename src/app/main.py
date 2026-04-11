@@ -1,6 +1,8 @@
-def main() -> None:
-    print("Hello, Python project on Mac!")
+from fastapi import FastAPI
+
+app = FastAPI()
 
 
-if __name__ == "__main__":
-    main()
+@app.get("/")
+def health_check() -> dict[str, str]:
+    return {"status": "ok"}
