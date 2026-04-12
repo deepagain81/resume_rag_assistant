@@ -3,21 +3,22 @@
 	"name": "resume-rag-assistant-worker",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-04-12",
-
+	"vars": {
+		"DATASET_VERSION": "v1"
+	},
 	// All bindings
 	"kv_namespaces": [
 		{
 			"binding": "QUERY_CACHE",
-			"id": "PRODUCTION_KV_NAMESPACE_ID",
-			"preview_id": "PREVIEW_KV_NAMESPACE_ID"
+			"id": "3e8876b2f88e46a38e4608956fc6b1c0",
+			"remote": true
 		}
 	],
-
 	"r2_buckets": [
 		{
-			"binding": "RESUME_BUCKET",
-			"bucket_name": "resume-bucket",
-			"preview_bucket_name": "resume-bucket-preview"
+			"bucket_name": "resume-rag-assistant",
+			"binding": "resume_rag_assistant",
+			"remote": true
 		}
 	]
 }

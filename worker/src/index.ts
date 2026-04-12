@@ -1,7 +1,8 @@
 export interface Env {
 	QUERY_CACHE: KVNamespace;
 	RESUME_BUCKET: R2Bucket;
-	//   OPENAI_API_KEY: string;
+	OPENAI_API_KEY: string;
+	DATASET_VERSION: string;
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -13,21 +14,34 @@ function jsonResponse(data: unknown, status = 200): Response {
 	});
 }
 
+async function handleHealth(env: Env): Promise<Response> {
+	return jsonResponse({
+		status: "ok",
+		datasetVersion: env.DATASET_VERSION,
+	});
+}
+
+async function handleQuery(env: Env): Promise<Response> {
+	return jsonResponse({
+		answer: "Worker query route is ready.",
+		source: "stub",
+		datasetVersion: env.DATASET_VERSION,
+	});
+}
+
 export default {
-	async fetch(request: Request, _env: Env): Promise<Response> {
+	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
 
-		if (request.method === "GET" && url.pathname === "/health") {
-			return jsonResponse({ status: "ok" });
-		}
+		switch (`${request.method}_${url.pathname}`) {
+			case "GET_/health":
+				return handleHealth(env);
 
-		if (request.method === "POST" && url.pathname === "/api/query") {
-			return jsonResponse({
-				answer: "Worker query route is ready.",
-				source: "stub",
-			});
-		}
+			case "POST_/api/query":
+				return handleQuery(env);
 
-		return jsonResponse({ error: "Not found" }, 404);
+			default:
+				return jsonResponse({ error: "Not found" }, 404);
+		}
 	},
 };
