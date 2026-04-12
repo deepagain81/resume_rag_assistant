@@ -1,0 +1,24 @@
+{
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "resume-rag-assistant-worker",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-04-12",
+    "vars": {
+        "DATASET_VERSION": "v1"
+    },
+    // All bindings
+    "kv_namespaces": [
+        {
+            "binding": "QUERY_CACHE",
+            "id": "3e8876b2f88e46a38e4608956fc6b1c0",
+            "remote": true
+        }
+    ],
+    "r2_buckets": [
+        {
+            "bucket_name": "resume-rag-assistant",
+            "binding": "resume_rag_assistant",
+            "remote": true
+        }
+    ]
+}

@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+npm exec lint-staged
+npm run typecheck
