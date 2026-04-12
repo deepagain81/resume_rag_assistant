@@ -1,22 +1,25 @@
-from fastapi import FastAPI
+from typing import Annotated
 
-from app.config import settings
+from fastapi import Depends, FastAPI
+
+from app.config import Settings, get_settings
 from app.schemas import QueryRequest, QueryResponse
 from app.services.rag_service import RagService
 
-app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-)
+app = FastAPI()
 
 rag_service = RagService()
 
+# Dependency injection for settings
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+
 
 @app.get("/")
-def read_root() -> dict[str, str]:
+def read_root(settings: SettingsDep) -> dict[str, str]:
     return {
-        "message": settings.app_name,
-        "version": settings.app_version,
+        "msg": settings.app_name,
+        "v": settings.app_version,
+        "env": settings.app_env,
     }
 
 
