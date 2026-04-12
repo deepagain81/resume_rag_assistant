@@ -1,0 +1,14 @@
+[
+  {
+    "chunk_id": "chunk-001",
+    "source": "resume",
+    "section": "summary",
+    "content": "Deepak is a software engineer with experience in React, React Native, Java, and enterprise application development."
+  },
+  {
+    "chunk_id": "chunk-002",
+    "source": "resume",
+    "section": "experience",
+    "content": "He has worked on frontend engineering, mobile applications, performance optimization, testing, and system integration."
+  }
+]

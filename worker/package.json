@@ -8,18 +8,20 @@
         "npm": "11.5.1"
     },
     "scripts": {
+        "generate-types": "wrangler types",
         "dev": "wrangler dev",
         "deploy": "wrangler deploy",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "lint": "biome lint .",
         "lint:fix": "biome lint . --write",
         "format": "biome format . --write",
-        "format:check": "biome format . --write=false",
+        "format:check": "biome format .",
         "test": "vitest run",
         "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+        "prepare": "husky install",
         "lf": "npm run lint:fix && npm run format",
         "lc": "npm run typecheck && npm run lint && npm run format:check",
-        "prepare": "husky install"
+        "gt": "npm run generate-types"
     },
     "lint-staged": {
         "*.{ts,tsx,js,jsx,json,jsonc,md}": [
@@ -29,7 +31,6 @@
     },
     "devDependencies": {
         "@biomejs/biome": "2.4.11",
-        "@cloudflare/workers-types": "4.20260412.1",
         "husky": "9.1.7",
         "lint-staged": "16.4.0",
         "typescript": "5.9.3",
