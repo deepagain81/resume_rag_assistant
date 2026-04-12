@@ -4,7 +4,9 @@
     "main": "src/index.ts",
     "compatibility_date": "2026-04-12",
     "vars": {
-        "DATASET_VERSION": "v1"
+        "DATASET_VERSION": "v1",
+        "CHUNKS_OBJECT_KEY": "dataset/v1/resume_chunks.json",
+        "EMBEDDINGS_OBJECT_KEY": "dataset/v1/resume_embeddings.json"
     },
     // All bindings
     "kv_namespaces": [
