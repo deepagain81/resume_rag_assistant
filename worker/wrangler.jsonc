@@ -1,0 +1,23 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "resume-rag-assistant-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-04-12",
+
+	// All bindings
+	"kv_namespaces": [
+		{
+			"binding": "QUERY_CACHE",
+			"id": "PRODUCTION_KV_NAMESPACE_ID",
+			"preview_id": "PREVIEW_KV_NAMESPACE_ID"
+		}
+	],
+
+	"r2_buckets": [
+		{
+			"binding": "RESUME_BUCKET",
+			"bucket_name": "resume-bucket",
+			"preview_bucket_name": "resume-bucket-preview"
+		}
+	]
+}
