@@ -15,7 +15,7 @@
         "lint": "biome lint .",
         "lint:fix": "biome lint . --write",
         "format": "biome format . --write",
-        "format:check": "biome format . --write=false",
+        "format:check": "biome format .",
         "test": "vitest run",
         "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
         "prepare": "husky install",

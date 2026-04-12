@@ -5,14 +5,30 @@ export interface Env {
     RESUME_BUCKET: R2Bucket;
     OPENAI_API_KEY: string;
     DATASET_VERSION: string;
+    CHUNKS_OBJECT_KEY: string;
+    EMBEDDINGS_OBJECT_KEY: string;
 }
+
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "https://www.deepakchapagain.com",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 function jsonResponse(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data), {
         status,
         headers: {
             "content-type": "application/json; charset=utf-8",
+            ...corsHeaders,
         },
+    });
+}
+
+function preflightResponse(): Response {
+    return new Response(null, {
+        status: 204,
+        headers: corsHeaders,
     });
 }
 
@@ -63,6 +79,9 @@ function isValidQueryRequest(value: unknown): value is QueryRequest {
 
 export default {
     async fetch(request: Request, env: Env): Promise<Response> {
+        if (request.method === "OPTIONS") {
+            return preflightResponse();
+        }
         const url = new URL(request.url);
 
         switch (`${request.method}_${url.pathname}`) {
