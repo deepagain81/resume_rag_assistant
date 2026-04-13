@@ -6,7 +6,9 @@
     "vars": {
         "DATASET_VERSION": "v1",
         "CHUNKS_OBJECT_KEY": "dataset/v1/resume_chunks.json",
-        "EMBEDDINGS_OBJECT_KEY": "dataset/v1/resume_embeddings.json"
+        "EMBEDDINGS_OBJECT_KEY": "dataset/v1/resume_embeddings.json",
+        "EMBEDDING_MODEL": "text-embedding-3-small",
+        "CHAT_MODEL": "gpt-4o-mini"
     },
     // All bindings
     "kv_namespaces": [
