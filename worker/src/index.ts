@@ -3,10 +3,12 @@ import {
     buildInternalErrorResponse,
     buildInvalidRequestBodyResponse,
     buildMalformedJsonResponse,
+    buildQuerySuccessResponse,
+    jsonResponse as buildApiJsonResponse,
 } from "./response";
 import { retrieveTopChunks } from "./retrieval";
 import { createOpenAIClient } from "./services";
-import type { QueryRequest, QueryResponse } from "./types";
+import type { QueryRequest, RetrievedChunk } from "./types";
 
 /* ============================================================================
  * Worker environment bindings
@@ -109,35 +111,58 @@ async function handleHealth(env: Env): Promise<Response> {
  * and returns a response.
  */
 async function handleQuery(env: Env, request: Request): Promise<Response> {
+    const requestId = crypto.randomUUID();
     let body: unknown;
-    let retrievedChunks = [];
+    let retrievedChunks: RetrievedChunk[] = [];
 
     try {
         body = await parseJsonBody(request);
     } catch {
-        return jsonResponse(buildMalformedJsonResponse("unknown_request_id"), 400);
+        return buildApiJsonResponse(buildMalformedJsonResponse(requestId), 400);
     }
 
     if (!isValidQueryRequest(body)) {
-        return jsonResponse(
-            buildInvalidRequestBodyResponse({ requestId: "unknown_request_id" }),
-            422,
-        );
+        return buildApiJsonResponse(buildInvalidRequestBodyResponse({ requestId }), 422);
     }
     const question = body.question.trim();
     try {
         const queryEmbedding = await getQueryEmbedding(env, question);
         retrievedChunks = await retrieveTopChunks(env, queryEmbedding.embedding, 3);
     } catch (_error) {
-        return jsonResponse(buildInternalErrorResponse({ requestId: "unknown_request_id" }), 500);
+        return buildApiJsonResponse(
+            buildInternalErrorResponse({
+                requestId,
+                question,
+                datasetVersion: env.DATASET_VERSION,
+            }),
+            500,
+        );
     }
 
     try {
         const prompt = buildAnswerPrompt(question, retrievedChunks);
         const answer = await getQueryAnswer(env, prompt);
-        return jsonResponse(answer, 200);
+        return buildApiJsonResponse(
+            buildQuerySuccessResponse({
+                answer,
+                source: "llm_generated",
+                retrievedChunks,
+                requestId,
+                datasetVersion: env.DATASET_VERSION,
+                question,
+                model: env.CHAT_MODEL,
+            }),
+            200,
+        );
     } catch (_error) {
-        return jsonResponse(buildInternalErrorResponse({ requestId: undefined }), 500);
+        return buildApiJsonResponse(
+            buildInternalErrorResponse({
+                requestId,
+                question,
+                datasetVersion: env.DATASET_VERSION,
+            }),
+            500,
+        );
     }
 }
 
@@ -145,7 +170,7 @@ async function handleQuery(env: Env, request: Request): Promise<Response> {
  * Query embedding workflow
  * ========================================================================== */
 
-interface QueryEmbeddingResponse extends QueryResponse {
+interface QueryEmbeddingResponse {
     embeddingDimensions: number;
     embedding: number[];
 }
@@ -156,21 +181,13 @@ async function getQueryEmbedding(env: Env, question: string): Promise<QueryEmbed
 
     return {
         embedding: embedding,
-        source: env.EMBEDDING_MODEL,
-        datasetVersion: env.DATASET_VERSION,
         embeddingDimensions: embedding.length,
-        data: "",
     };
 }
 
-async function getQueryAnswer(env: Env, prompt: string): Promise<QueryResponse> {
+async function getQueryAnswer(env: Env, prompt: string): Promise<string> {
     const client = getOpenAIClient(env);
-    const answer = await client.generateAnswer(prompt);
-    return {
-        data: answer,
-        source: env.CHAT_MODEL,
-        datasetVersion: env.DATASET_VERSION,
-    };
+    return client.generateAnswer(prompt);
 }
 
 /* ============================================================================
