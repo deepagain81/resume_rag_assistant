@@ -1,3 +1,4 @@
+import { buildAnswerPrompt } from "./prompts";
 import {
     buildInternalErrorResponse,
     buildInvalidRequestBodyResponse,
@@ -109,6 +110,7 @@ async function handleHealth(env: Env): Promise<Response> {
  */
 async function handleQuery(env: Env, request: Request): Promise<Response> {
     let body: unknown;
+    let retrievedChunks = [];
 
     try {
         body = await parseJsonBody(request);
@@ -125,11 +127,17 @@ async function handleQuery(env: Env, request: Request): Promise<Response> {
     const question = body.question.trim();
     try {
         const queryEmbedding = await getQueryEmbedding(env, question);
-        const retrievedChunks = await retrieveTopChunks(env, queryEmbedding.embedding, 3);
-
-        return jsonResponse(retrievedChunks, 200);
+        retrievedChunks = await retrieveTopChunks(env, queryEmbedding.embedding, 3);
     } catch (_error) {
         return jsonResponse(buildInternalErrorResponse({ requestId: "unknown_request_id" }), 500);
+    }
+
+    try {
+        const prompt = buildAnswerPrompt(question, retrievedChunks);
+        const answer = await getQueryAnswer(env, prompt);
+        return jsonResponse(answer, 200);
+    } catch (_error) {
+        return jsonResponse(buildInternalErrorResponse({ requestId: undefined }), 500);
     }
 }
 
@@ -143,7 +151,7 @@ interface QueryEmbeddingResponse extends QueryResponse {
 }
 
 async function getQueryEmbedding(env: Env, question: string): Promise<QueryEmbeddingResponse> {
-    const client = createOpenAIClientFromEnv(env);
+    const client = getOpenAIClient(env);
     const embedding = await client.embedQuery(question);
 
     return {
@@ -155,16 +163,36 @@ async function getQueryEmbedding(env: Env, question: string): Promise<QueryEmbed
     };
 }
 
+async function getQueryAnswer(env: Env, prompt: string): Promise<QueryResponse> {
+    const client = getOpenAIClient(env);
+    const answer = await client.generateAnswer(prompt);
+    return {
+        data: answer,
+        source: env.CHAT_MODEL,
+        datasetVersion: env.DATASET_VERSION,
+    };
+}
+
 /* ============================================================================
- * OpenAI client creation
+ * OpenAI Singleton client
  * ========================================================================== */
 
-function createOpenAIClientFromEnv(env: Env) {
-    return createOpenAIClient({
-        OPENAI_API_KEY: env.OPENAI_API_KEY,
-        EMBEDDING_MODEL: env.EMBEDDING_MODEL,
-        CHAT_MODEL: env.CHAT_MODEL,
-    });
+let openAIClient: ReturnType<typeof createOpenAIClient> | null = null;
+let openAIClientKey: string | null = null;
+
+function getOpenAIClient(env: Env): ReturnType<typeof createOpenAIClient> {
+    const nextKey = `${env.OPENAI_API_KEY}:${env.EMBEDDING_MODEL}:${env.CHAT_MODEL}`;
+
+    if (!openAIClient || openAIClientKey !== nextKey) {
+        openAIClient = createOpenAIClient({
+            OPENAI_API_KEY: env.OPENAI_API_KEY,
+            EMBEDDING_MODEL: env.EMBEDDING_MODEL,
+            CHAT_MODEL: env.CHAT_MODEL,
+        });
+        openAIClientKey = nextKey;
+    }
+
+    return openAIClient;
 }
 
 /* ============================================================================

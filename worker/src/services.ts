@@ -57,7 +57,27 @@ interface GenerateResponseRequestBody {
 }
 
 interface GenerateResponseApiResponse {
-    output_text?: string;
+    status: string;
+    model: string;
+    output: OutputItem[];
+    usage?: {
+        input_tokens: number;
+        output_tokens: number;
+        total_tokens: number;
+    };
+}
+
+interface OutputItem {
+    id: string;
+    type: string;
+    status: string;
+    role: string;
+    content: OutputContentItem[];
+}
+
+interface OutputContentItem {
+    type: string;
+    text?: string;
 }
 
 /* ============================================================================
@@ -111,25 +131,23 @@ export class OpenAIClient {
     }
 
     /**
-     * Generates a text response from the LLM.
+     * Generates a text answer from the LLM.
      */
-    async generateResponse(prompt: string): Promise<string> {
-        const normalizedPrompt = prompt.trim();
-
-        if (!normalizedPrompt) {
-            throw new Error("Prompt must not be empty.");
+    async generateAnswer(prompt: string): Promise<string> {
+        let response: GenerateResponseApiResponse;
+        try {
+            response = await this.requestJson<
+                GenerateResponseRequestBody,
+                GenerateResponseApiResponse
+            >(OPENAI.response_endpoint, {
+                model: this.chatModel,
+                input: prompt,
+            });
+        } catch (_error) {
+            throw new Error("OpenAI API failed or Prompt building error.");
         }
 
-        const response = await this.requestJson<
-            GenerateResponseRequestBody,
-            GenerateResponseApiResponse
-        >(OPENAI.response_endpoint, {
-            model: this.chatModel,
-            input: normalizedPrompt,
-        });
-
-        const outputText = response.output_text?.trim();
-
+        const outputText = response.output[0].content[0].text;
         if (!outputText) {
             throw new Error("OpenAI response did not contain valid output text.");
         }
