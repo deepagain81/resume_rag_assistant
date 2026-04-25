@@ -60,7 +60,14 @@ jobs:
           cache-dependency-path: worker/package-lock.json
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci --include=optional
+
+      - name: Ensure Rollup Linux Native Binary
+        run: |
+          if ! node -e "require.resolve('@rollup/rollup-linux-x64-gnu')" >/dev/null 2>&1; then
+            ROLLUP_VERSION="$(node -p "require('rollup/package.json').version")"
+            npm install --no-save "@rollup/rollup-linux-x64-gnu@${ROLLUP_VERSION}"
+          fi
 
       - name: Typecheck
         run: npm run typecheck
