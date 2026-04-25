@@ -1,3 +1,9 @@
+import {
+    buildInternalErrorResponse,
+    buildInvalidRequestBodyResponse,
+    buildMalformedJsonResponse,
+} from "./response";
+import { retrieveTopChunks } from "./retrieval";
 import { createOpenAIClient } from "./services";
 import type { QueryRequest, QueryResponse } from "./types";
 
@@ -102,68 +108,29 @@ async function handleHealth(env: Env): Promise<Response> {
  * and returns a response.
  */
 async function handleQuery(env: Env, request: Request): Promise<Response> {
-    const parsedRequest = await parseAndValidateQueryRequest(request);
-
-    if (!parsedRequest.ok) {
-        return jsonResponse({ error: parsedRequest.error }, parsedRequest.status);
-    }
-
-    try {
-        const result = await getQueryEmbedding(env, parsedRequest.question);
-
-        return jsonResponse(result, 200);
-    } catch (error) {
-        return jsonResponse(
-            {
-                error: buildQueryErrMsg(error),
-            },
-            500,
-        );
-    }
-}
-
-/* ============================================================================
- * Query request parsing and validation
- * ========================================================================== */
-
-interface QueryParseSuccess {
-    ok: true;
-    question: string;
-}
-
-interface QueryParseFailure {
-    ok: false;
-    status: 400 | 422;
-    error: string;
-}
-
-type QueryParseResult = QueryParseSuccess | QueryParseFailure;
-
-async function parseAndValidateQueryRequest(request: Request): Promise<QueryParseResult> {
     let body: unknown;
 
     try {
         body = await parseJsonBody(request);
     } catch {
-        return {
-            ok: false,
-            status: 400,
-            error: "Malformed JSON request body.",
-        };
+        return jsonResponse(buildMalformedJsonResponse("unknown_request_id"), 400);
     }
 
     if (!isValidQueryRequest(body)) {
-        return {
-            ok: false,
-            status: 422,
-            error: 'Invalid request body. Expected: {"question":"..."} with a non-empty string.',
-        };
+        return jsonResponse(
+            buildInvalidRequestBodyResponse({ requestId: "unknown_request_id" }),
+            422,
+        );
     }
+    const question = body.question.trim();
+    try {
+        const queryEmbedding = await getQueryEmbedding(env, question);
+        const retrievedChunks = await retrieveTopChunks(env, queryEmbedding.embedding, 3);
 
-    return {
-        ok: true,
-        question: body.question.trim(),
-    };
+        return jsonResponse(retrievedChunks, 200);
+    } catch (_error) {
+        return jsonResponse(buildInternalErrorResponse({ requestId: "unknown_request_id" }), 500);
+    }
 }
 
 /* ============================================================================
@@ -172,6 +139,7 @@ async function parseAndValidateQueryRequest(request: Request): Promise<QueryPars
 
 interface QueryEmbeddingResponse extends QueryResponse {
     embeddingDimensions: number;
+    embedding: number[];
 }
 
 async function getQueryEmbedding(env: Env, question: string): Promise<QueryEmbeddingResponse> {
@@ -179,10 +147,11 @@ async function getQueryEmbedding(env: Env, question: string): Promise<QueryEmbed
     const embedding = await client.embedQuery(question);
 
     return {
-        answer: `${embedding}`,
+        embedding: embedding,
         source: env.EMBEDDING_MODEL,
         datasetVersion: env.DATASET_VERSION,
         embeddingDimensions: embedding.length,
+        data: "",
     };
 }
 
@@ -196,18 +165,6 @@ function createOpenAIClientFromEnv(env: Env) {
         EMBEDDING_MODEL: env.EMBEDDING_MODEL,
         CHAT_MODEL: env.CHAT_MODEL,
     });
-}
-
-/* ============================================================================
- * Error normalization
- * ========================================================================== */
-
-function buildQueryErrMsg(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return "Unexpected error while generating query embedding.";
 }
 
 /* ============================================================================
