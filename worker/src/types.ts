@@ -2,17 +2,6 @@ export interface QueryRequest {
     question: string;
 }
 
-export interface QueryResponse {
-    data: string;
-    source: string;
-    datasetVersion: string;
-}
-
-export interface ErrorResponse {
-    error: string;
-    respCode: number;
-}
-
 export interface RetrievedChunk {
     chunkId: string;
     source: string;
@@ -66,7 +55,6 @@ export interface ResponseMeta {
     datasetVersion?: string;
     question?: string;
     retrievedCount?: number;
-    generated?: boolean;
     model?: string;
 }
 
@@ -79,7 +67,6 @@ export interface Citation {
 export interface QueryResponseData {
     answer: string;
     source: "retrieval_stub" | "llm_generated";
-    retrievedChunks: RetrievedChunk[];
     citations?: Citation[];
 }
 
@@ -88,6 +75,5 @@ export interface BuildMetaInput {
     datasetVersion?: string;
     question?: string;
     retrievedCount?: number;
-    generated?: boolean;
     model?: string;
 }

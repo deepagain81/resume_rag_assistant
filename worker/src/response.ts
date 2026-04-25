@@ -20,7 +20,6 @@ export function buildMeta(input: BuildMetaInput = {}): ResponseMeta {
         datasetVersion: input.datasetVersion,
         question: input.question,
         retrievedCount: input.retrievedCount,
-        generated: input.generated,
         model: input.model,
     };
 }
@@ -65,7 +64,6 @@ export function buildQuerySuccessResponse(params: {
     requestId?: string;
     datasetVersion?: string;
     question?: string;
-    generated?: boolean;
     model?: string;
 }): ApiResponse<QueryResponseData> {
     const retrievedCount = params.retrievedChunks.length;
@@ -75,7 +73,6 @@ export function buildQuerySuccessResponse(params: {
         datasetVersion: params.datasetVersion,
         question: params.question,
         retrievedCount,
-        generated: params.generated,
         model: params.model,
     });
 
@@ -87,7 +84,6 @@ export function buildQuerySuccessResponse(params: {
         {
             answer: params.answer,
             source: params.source,
-            retrievedChunks: params.retrievedChunks,
             citations: params.citations,
         },
         meta,
@@ -188,7 +184,6 @@ export function buildGenerationFailedResponse(params?: {
             requestId: params?.requestId,
             question: params?.question,
             datasetVersion: params?.datasetVersion,
-            generated: true,
             model: params?.model,
         }),
     );
