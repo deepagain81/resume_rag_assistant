@@ -1,7 +1,47 @@
+# Python
 .venv/
+venv/
+env/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.ipynb_checkpoints/
+
+# Node / TypeScript
+node_modules/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.turbo/
+.vite/
+.vitest/
+
+# Cloudflare Wrangler
+.wrangler/
+.dev.vars
+
+# IDE / OS
 .DS_Store
 .vscode/
 .idea/
+
+# Env files
 .env
+.env.*

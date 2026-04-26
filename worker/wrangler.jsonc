@@ -1,0 +1,29 @@
+{
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "resume-rag-assistant-worker",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-04-12",
+    "vars": {
+        "DATASET_VERSION": "v1",
+        "CACHE_TTL_SECONDS": 31536000, // 1 year in seconds
+        "CHUNKS_OBJECT_KEY": "precompute/resume_chunks.json",
+        "EMBEDDINGS_OBJECT_KEY": "precompute/resume_embeddings.json",
+        "EMBEDDING_MODEL": "text-embedding-3-small",
+        "CHAT_MODEL": "gpt-4o-mini"
+    },
+    // All bindings
+    "kv_namespaces": [
+        {
+            "binding": "QUERY_CACHE",
+            "id": "3e8876b2f88e46a38e4608956fc6b1c0",
+            "remote": true
+        }
+    ],
+    "r2_buckets": [
+        {
+            "binding": "RESUME_BUCKET",
+            "bucket_name": "resume-rag-assistant",
+            "remote": true
+        }
+    ]
+}
