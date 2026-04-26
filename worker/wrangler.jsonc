@@ -5,6 +5,7 @@
     "compatibility_date": "2026-04-12",
     "vars": {
         "DATASET_VERSION": "v1",
+        "CACHE_TTL_SECONDS": 31536000, // 1 year in seconds
         "CHUNKS_OBJECT_KEY": "precompute/resume_chunks.json",
         "EMBEDDINGS_OBJECT_KEY": "precompute/resume_embeddings.json",
         "EMBEDDING_MODEL": "text-embedding-3-small",
