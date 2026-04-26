@@ -1,4 +1,4 @@
-import { getCachedResponse } from "./cache";
+import { getCachedResponse, putCachedResponse } from "./cache";
 import { buildAnswerPrompt } from "./prompts";
 import {
     buildInternalErrorResponse,
@@ -166,6 +166,8 @@ async function handleQuery(env: Env, request: Request): Promise<Response> {
     try {
         const prompt = buildAnswerPrompt(question, retrievedChunks);
         const answer = await getQueryAnswer(env, prompt);
+        await putCachedResponse(env, question, answer);
+
         return buildApiJsonResponse(
             buildQuerySuccessResponse({
                 answer,

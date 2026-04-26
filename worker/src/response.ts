@@ -58,7 +58,7 @@ export function buildErrorResponse(
 
 export function buildQuerySuccessResponse(params: {
     answer: string;
-    source: "retrieval_stub" | "llm_generated";
+    cacheHit: boolean;
     retrievedChunks: RetrievedChunk[];
     citations?: Citation[];
     requestId?: string;
@@ -83,7 +83,7 @@ export function buildQuerySuccessResponse(params: {
             : "Query processed successfully, but no relevant resume context was found.",
         {
             answer: params.answer,
-            source: params.source,
+            cacheHit: params.cacheHit,
             citations: params.citations,
         },
         meta,

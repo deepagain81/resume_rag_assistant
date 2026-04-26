@@ -66,7 +66,7 @@ export interface Citation {
 
 export interface QueryResponseData {
     answer: string;
-    source: "retrieval_stub" | "llm_generated";
+    cacheHit: boolean;
     citations?: Citation[];
 }
 
