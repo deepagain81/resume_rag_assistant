@@ -1,3 +1,4 @@
+import { getCachedResponse } from "./cache";
 import { buildAnswerPrompt } from "./prompts";
 import {
     buildInternalErrorResponse,
@@ -21,6 +22,7 @@ export interface Env {
     RESUME_BUCKET: R2Bucket;
     OPENAI_API_KEY: string;
     DATASET_VERSION: string;
+    CACHE_TTL_SECONDS: number;
     CHUNKS_OBJECT_KEY: string;
     EMBEDDINGS_OBJECT_KEY: string;
     EMBEDDING_MODEL: string;
@@ -125,6 +127,28 @@ async function handleQuery(env: Env, request: Request): Promise<Response> {
         return buildApiJsonResponse(buildInvalidRequestBodyResponse({ requestId }), 422);
     }
     const question = body.question.trim();
+    const cachedResponse = await getCachedResponse(
+        {
+            QUERY_CACHE: env.QUERY_CACHE,
+            DATASET_VERSION: env.DATASET_VERSION,
+            CACHE_TTL_SECONDS: env.CACHE_TTL_SECONDS,
+        },
+        question,
+    );
+    if (cachedResponse) {
+        return buildApiJsonResponse(
+            buildQuerySuccessResponse({
+                answer: cachedResponse,
+                cacheHit: true,
+                retrievedChunks,
+                requestId,
+                datasetVersion: env.DATASET_VERSION,
+                question,
+                model: env.CHAT_MODEL,
+            }),
+            200,
+        );
+    }
     try {
         const queryEmbedding = await getQueryEmbedding(env, question);
         retrievedChunks = await retrieveTopChunks(env, queryEmbedding.embedding, 3);
@@ -145,7 +169,7 @@ async function handleQuery(env: Env, request: Request): Promise<Response> {
         return buildApiJsonResponse(
             buildQuerySuccessResponse({
                 answer,
-                source: "llm_generated",
+                cacheHit: false,
                 retrievedChunks,
                 requestId,
                 datasetVersion: env.DATASET_VERSION,
