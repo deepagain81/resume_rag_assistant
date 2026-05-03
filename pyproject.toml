@@ -1,8 +1,9 @@
 [project]
 name = "resume-rag-assistant"
-version = "0.1.0"
+version = "0.2.0"
 description = "Resume RAG Assistant"
 requires-python = ">=3.12,<3.13"
+readme = "README.md"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -12,17 +13,43 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = [
+    ".venv",
+    "venv",
+    "env",
+    "data/chunks.json",
+    "data/embeddings.json",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
 
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+extend-exclude = '''
+/(
+    \.venv
+  | venv
+  | env
+  | data/chunks\.json
+  | data/embeddings\.json
+)/
+'''
 
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "src"
+files = ["src", "scripts", "tests"]
+exclude = [
+    "^\\.venv/",
+    "^venv/",
+    "^env/",
+]
 check_untyped_defs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
