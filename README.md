@@ -14,14 +14,11 @@ The `worker/` app is the runtime API layer for the chatbot.
 
 - Runtime: Cloudflare Workers (TypeScript)
 - Purpose: receives user questions and returns resume-grounded answers
-- Retrieval data source: precomputed chunks and embeddings stored in Cloudflare R2
+- Retrieval data source: `dataset/DATASET_VERSION/resume_chunks.json` and `dataset/DATASET_VERSION/resume_embeddings.json` in Cloudflare R2
 - Caching: query responses are cached in Cloudflare KV by normalized question + dataset version
-- Main routes include:
-- `GET /health`: basic health and dataset version check
-- `POST /api/query`: validate request, retrieve relevant chunks, generate answer
 
 Use this Python pipeline to generate the data artifacts consumed by the Worker.
-For worker setup, deployment, and runtime configuration details, use files under `worker/`.
+For worker setup, deployment, endpoint behavior, and runtime configuration, see `worker/README.md`.
 
 ## What This Repo Includes
 
@@ -52,8 +49,8 @@ resume-rag-assistant/
 ├── tests/
 │   └── test_main.py
 ├── worker/
+│   ├── README.md
 │   ├── src/
-│   ├── data/precompute/
 │   ├── wrangler.jsonc
 │   ├── package.json
 │   └── tsconfig.json
@@ -210,6 +207,7 @@ EMBEDDINGS_OBJECT_KEY=dataset-embedding-key
 ```
 
 Only `OPENAI_API_KEY` is required for local embedding generation in this Python pipeline.
+Worker-specific env/runtime meaning is documented in `worker/README.md`.
 
 ## Optional R2 Upload Commands
 
