@@ -58,12 +58,12 @@ rag-build: chunks embeddings
 
 # Upload chunks.json to Cloudflare R2
 upload-chunks:
-	wrangler r2 object put resume-bucket/dataset/v1/resume_chunks.json \
+	wrangler r2 object put resume-bucket/dataset/v2/resume_chunks.json \
 		--file data/chunks.json
 
 # Upload embeddings.json to Cloudflare R2
 upload-embeddings:
-	wrangler r2 object put resume-bucket/dataset/v1/resume_embeddings.json \
+	wrangler r2 object put resume-bucket/dataset/v2/resume_embeddings.json \
 		--file data/embeddings.json
 
 # Clean generated Python/cache files
