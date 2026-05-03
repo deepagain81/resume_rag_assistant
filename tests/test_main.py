@@ -1,46 +1,25 @@
-import pytest
-from fastapi.testclient import TestClient
+from __future__ import annotations
 
-from app.config import get_settings
-from app.main import app
-
-client = TestClient(app)
-
-
-def test_read_root() -> None:
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "msg": "Resume Assistant RAG",
-        "v": "0.2.0",
-        "env": "dev",
-    }
+from app.config import (
+    CANONICAL_PROFILE_PATH,
+    CHUNKS_PATH,
+    DEFAULT_EMBEDDING_MODEL,
+    EMBEDDINGS_PATH,
+    R2_CHUNKS_OBJECT_KEY,
+    R2_EMBEDDINGS_OBJECT_KEY,
+)
 
 
-def test_health_check() -> None:
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-
-def test_query() -> None:
-    response = client.post("/query", json={"question": "Summarize my resume"})
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "answer": "Summarize my resume",
-        "source": "stub",
-    }
+def test_config_paths_are_defined() -> None:
+    assert CANONICAL_PROFILE_PATH.name == "canonical-profile.md"
+    assert CHUNKS_PATH.name == "chunks.json"
+    assert EMBEDDINGS_PATH.name == "embeddings.json"
 
 
-def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_ENV", "test")
-    get_settings.cache_clear()
+def test_default_embedding_model() -> None:
+    assert DEFAULT_EMBEDDING_MODEL == "text-embedding-3-small"
 
-    settings = get_settings()
 
-    assert settings.app_env == "test"
-
-    get_settings.cache_clear()
+def test_r2_object_keys() -> None:
+    assert R2_CHUNKS_OBJECT_KEY == "dataset/v2/resume_chunks.json"
+    assert R2_EMBEDDINGS_OBJECT_KEY == "dataset/v2/resume_embeddings.json"

@@ -1,22 +1,20 @@
-from functools import lru_cache
+"""Shared configuration for the resume RAG ingestion pipeline."""
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from __future__ import annotations
 
+from pathlib import Path
 
-class Settings(BaseSettings):
-    app_name: str = "Resume Assistant RAG"
-    app_version: str = "0.2.0"
-    app_env: str = Field(default="dev", alias="APP_ENV")
-    debug: bool = False
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+DATA_DIR = PROJECT_ROOT / "data"
+SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
+CANONICAL_PROFILE_PATH = DATA_DIR / "canonical-profile.md"
+CHUNKS_PATH = DATA_DIR / "chunks.json"
+EMBEDDINGS_PATH = DATA_DIR / "embeddings.json"
 
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+
+# R2 object keys used by the Cloudflare Worker runtime.
+R2_CHUNKS_OBJECT_KEY = "dataset/v2/resume_chunks.json"
+R2_EMBEDDINGS_OBJECT_KEY = "dataset/v2/resume_embeddings.json"
