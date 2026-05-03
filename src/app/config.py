@@ -10,8 +10,8 @@ DATA_DIR = PROJECT_ROOT / "data"
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
 CANONICAL_PROFILE_PATH = DATA_DIR / "canonical-profile.md"
-CHUNKS_PATH = DATA_DIR / "chunks.json"
-EMBEDDINGS_PATH = DATA_DIR / "embeddings.json"
+CHUNKS_PATH = DATA_DIR / "resume_chunks.json"
+EMBEDDINGS_PATH = DATA_DIR / "resume_embeddings.json"
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 

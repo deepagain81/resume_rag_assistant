@@ -17,8 +17,8 @@ extend-exclude = [
     ".venv",
     "venv",
     "env",
-    "data/chunks.json",
-    "data/embeddings.json",
+    "data/resume_chunks.json",
+    "data/resume_embeddings.json",
 ]
 
 [tool.ruff.lint]
@@ -36,8 +36,8 @@ extend-exclude = '''
     \.venv
   | venv
   | env
-  | data/chunks\.json
-  | data/embeddings\.json
+  | data/resume_chunks\.json
+  | data/resume_embeddings\.json
 )/
 '''
 

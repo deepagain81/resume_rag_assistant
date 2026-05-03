@@ -49,8 +49,8 @@ dist/
 !.env.example
 
 # Generated RAG artifacts
-data/chunks.json
-data/embeddings.json
+data/resume_chunks.json
+data/resume_embeddings.json
 
 # Keep canonical RAG source of truth
 !data/canonical-profile.md

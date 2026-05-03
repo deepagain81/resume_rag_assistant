@@ -3,8 +3,8 @@
 Python ingestion pipeline for a resume-aware RAG dataset.
 
 It converts a canonical Markdown profile into:
-- `data/chunks.json` (semantic chunks + metadata)
-- `data/embeddings.json` (OpenAI embeddings + retrieval metadata)
+- `data/resume_chunks.json` (semantic chunks + metadata)
+- `data/resume_embeddings.json` (OpenAI embeddings + retrieval metadata)
 
 The Cloudflare Worker runtime is in `worker/`. This README keeps worker coverage high-level only.
 
@@ -35,8 +35,8 @@ For worker setup, deployment, endpoint behavior, and runtime configuration, see 
 resume-rag-assistant/
 ├── data/
 │   ├── canonical-profile.md
-│   ├── chunks.json
-│   └── embeddings.json
+│   ├── resume_chunks.json
+│   └── resume_embeddings.json
 ├── scripts/
 │   ├── build_chunks.py
 │   └── build_embeddings.py
@@ -93,9 +93,9 @@ pre-commit install
 ```text
 data/canonical-profile.md
   -> scripts/build_chunks.py
-  -> data/chunks.json
+  -> data/resume_chunks.json
   -> scripts/build_embeddings.py
-  -> data/embeddings.json
+  -> data/resume_embeddings.json
 ```
 
 ### 1) Build Chunks
@@ -109,7 +109,7 @@ Equivalent command:
 ```bash
 python scripts/build_chunks.py \
   --input data/canonical-profile.md \
-  --output data/chunks.json
+  --output data/resume_chunks.json
 ```
 
 ### 2) Dry Run Embeddings (No OpenAI Call)
@@ -118,7 +118,7 @@ python scripts/build_chunks.py \
 make rag-dry-run
 ```
 
-This validates `chunks.json` and reports reusable vs. pending embeddings.
+This validates `resume_chunks.json` and reports reusable vs. pending embeddings.
 
 ### 3) Build Embeddings
 
@@ -131,8 +131,8 @@ Equivalent command:
 
 ```bash
 python scripts/build_embeddings.py \
-  --input data/chunks.json \
-  --output data/embeddings.json \
+  --input data/resume_chunks.json \
+  --output data/resume_embeddings.json \
   --model text-embedding-3-small
 ```
 
@@ -140,8 +140,8 @@ Optional flags:
 
 ```bash
 python scripts/build_embeddings.py \
-  --input data/chunks.json \
-  --output data/embeddings.json \
+  --input data/resume_chunks.json \
+  --output data/resume_embeddings.json \
   --model text-embedding-3-small \
   --batch-size 64 \
   --dimensions 1536 \
@@ -156,13 +156,13 @@ make rag-build
 
 ## Artifact Notes
 
-`data/chunks.json` includes:
+`data/resume_chunks.json` includes:
 - `schema_version`
 - `chunking_strategy`
 - `source_metadata`
 - `chunks[]` with `id`, `content`, `content_for_embedding`, `metadata`
 
-`data/embeddings.json` includes:
+`data/resume_embeddings.json` includes:
 - `status` (`dry_run`, `partial`, `complete`)
 - model + dimensions
 - usage tokens

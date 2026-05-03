@@ -12,8 +12,8 @@ from app.config import (
 
 def test_config_paths_are_defined() -> None:
     assert CANONICAL_PROFILE_PATH.name == "canonical-profile.md"
-    assert CHUNKS_PATH.name == "chunks.json"
-    assert EMBEDDINGS_PATH.name == "embeddings.json"
+    assert CHUNKS_PATH.name == "resume_chunks.json"
+    assert EMBEDDINGS_PATH.name == "resume_embeddings.json"
 
 
 def test_default_embedding_model() -> None:

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate embeddings.json from chunks.json for a resume-aware RAG system.
+Generate resume_embeddings.json from resume_chunks.json for a resume-aware RAG system.
 
 Usage:
   export OPENAI_API_KEY="your_api_key"
 
   python scripts/build_embeddings.py \
-    --input data/chunks.json \
-    --output data/embeddings.json \
+    --input data/resume_chunks.json \
+    --output data/resume_embeddings.json \
     --model text-embedding-3-small
 
 """
@@ -86,7 +86,7 @@ def validate_chunks_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
         if not content_hash:
             raise ValueError(
                 f"Chunk '{chunk_id}' is missing metadata.content_hash. "
-                "Regenerate chunks.json with build_chunks.py."
+                "Regenerate resume_chunks.json with build_chunks.py."
             )
 
         seen_ids.add(chunk_id)
@@ -98,7 +98,7 @@ def load_existing_embeddings(output_path: Path) -> dict[str, dict[str, Any]]:
     """
     Supports resumable generation.
 
-    If embeddings.json already exists, this returns existing vectors by chunk_id.
+    If resume_embeddings.json already exists, this returns existing vectors by chunk_id.
     The script will reuse only embeddings whose content_hash still matches.
     """
     if not output_path.exists():
@@ -302,7 +302,7 @@ def make_output_payload(
         "schema_version": "1.0.0",
         "status": status,
         "generated_at": utc_now_iso(),
-        "generated_from": chunks_payload.get("generated_from", "chunks.json"),
+        "generated_from": chunks_payload.get("generated_from", "resume_chunks.json"),
         "source_schema_version": chunks_payload.get("schema_version"),
         "source_chunk_count": len(chunks),
         "embedding_count": len(ordered_embeddings),
@@ -319,8 +319,8 @@ def make_output_payload(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="Path to chunks.json")
-    parser.add_argument("--output", required=True, help="Path to generated embeddings.json")
+    parser.add_argument("--input", required=True, help="Path to resume_chunks.json")
+    parser.add_argument("--output", required=True, help="Path to generated resume_embeddings.json")
     parser.add_argument(
         "--model", default=DEFAULT_MODEL, help=f"Embedding model. Default: {DEFAULT_MODEL}"
     )

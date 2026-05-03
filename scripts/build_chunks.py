@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build chunks.json from canonical-profile.md for a resume-aware RAG system.
+Build resume_chunks.json from canonical-profile.md for a resume-aware RAG system.
 
 This script is intentionally dependency-free so it can run in a simple project,
 CI job, or local Python environment.
@@ -8,7 +8,7 @@ CI job, or local Python environment.
 Usage:
   python scripts/build_chunks.py \
     --input data/canonical-profile.md \
-    --output data/chunks.json
+    --output data/resume_chunks.json
 """
 
 from __future__ import annotations
@@ -522,7 +522,7 @@ def build_chunks(markdown: str, source_file: str = "canonical-profile.md") -> di
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, help="Path to canonical Markdown profile")
-    parser.add_argument("--output", required=True, help="Path to generated chunks.json")
+    parser.add_argument("--output", required=True, help="Path to generated resume_chunks.json")
     args = parser.parse_args()
 
     input_path = Path(args.input)

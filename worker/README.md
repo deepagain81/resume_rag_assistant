@@ -35,7 +35,7 @@ Current defaults in `wrangler.jsonc`:
 ## R2 Dataset Layout
 
 ```text
-resume-bucket/
+resume-rag-assistant/
 └── dataset/
     ├── v1/
     │   ├── resume_chunks.json

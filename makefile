@@ -32,39 +32,39 @@ check:
 	$(BLACK) --check .
 	$(PYTEST)
 
-# Generate chunks.json from canonical-profile.md
+# Generate resume_chunks.json from canonical-profile.md
 chunks:
 	python scripts/build_chunks.py \
 		--input data/canonical-profile.md \
-		--output data/chunks.json
+		--output data/resume_chunks.json
 
 # Dry-run embedding generation without calling OpenAI
 rag-dry-run: chunks
 	python scripts/build_embeddings.py \
-		--input data/chunks.json \
-		--output data/embeddings.json \
+		--input data/resume_chunks.json \
+		--output data/resume_embeddings.json \
 		--model text-embedding-3-small \
 		--dry-run
 
-# Generate embeddings.json from chunks.json
+# Generate resume_embeddings.json from resume_chunks.json
 embeddings: chunks
 	python scripts/build_embeddings.py \
-		--input data/chunks.json \
-		--output data/embeddings.json \
+		--input data/resume_chunks.json \
+		--output data/resume_embeddings.json \
 		--model text-embedding-3-small
 
-# Full RAG build: canonical-profile.md -> chunks.json -> embeddings.json
+# Full RAG build: canonical-profile.md -> resume_chunks.json -> resume_embeddings.json
 rag-build: chunks embeddings
 
-# Upload chunks.json to Cloudflare R2
+# Upload resume_chunks.json to Cloudflare R2
 upload-chunks:
-	wrangler r2 object put resume-bucket/dataset/v2/resume_chunks.json \
-		--file data/chunks.json
+	wrangler r2 object put resume-rag-assistant/dataset/v2/resume_chunks.json \
+		--file data/resume_chunks.json
 
-# Upload embeddings.json to Cloudflare R2
+# Upload resume_embeddings.json to Cloudflare R2
 upload-embeddings:
-	wrangler r2 object put resume-bucket/dataset/v2/resume_embeddings.json \
-		--file data/embeddings.json
+	wrangler r2 object put resume-rag-assistant/dataset/v2/resume_embeddings.json \
+		--file data/resume_embeddings.json
 
 # Clean generated Python/cache files
 clean:

@@ -115,7 +115,10 @@ export async function retrieveTopChunks(
 ): Promise<RetrievedChunk[]> {
     const scored: RetrievedChunk[] = [];
     // Load the pipeline chunk artifact from R2.
-    const chunksPayload = await readJsonObject<ChunksFile>(env.RESUME_BUCKET, env.CHUNKS_OBJECT_KEY);
+    const chunksPayload = await readJsonObject<ChunksFile>(
+        env.RESUME_BUCKET,
+        env.CHUNKS_OBJECT_KEY,
+    );
 
     // Load the pipeline embedding artifact from R2.
     const embeddingsPayload = await readJsonObject<EmbeddingsFile>(
