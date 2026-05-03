@@ -4,6 +4,7 @@ VENV_BIN := .venv/bin
 RUFF := $(if $(wildcard $(VENV_BIN)/ruff),$(VENV_BIN)/ruff,ruff)
 BLACK := $(if $(wildcard $(VENV_BIN)/black),$(VENV_BIN)/black,black)
 PYTEST := $(if $(wildcard $(VENV_BIN)/pytest),$(VENV_BIN)/pytest,pytest)
+WRANGLER := $(if $(wildcard worker/node_modules/.bin/wrangler),worker/node_modules/.bin/wrangler,wrangler)
 
 # Install Python dependencies
 i:
@@ -58,13 +59,15 @@ rag-build: chunks embeddings
 
 # Upload resume_chunks.json to Cloudflare R2
 upload-chunks:
-	wrangler r2 object put resume-rag-assistant/dataset/v2/resume_chunks.json \
-		--file data/resume_chunks.json
+	$(WRANGLER) r2 object put resume-rag-assistant/dataset/v2/resume_chunks.json \
+		--file data/resume_chunks.json \
+		--remote
 
 # Upload resume_embeddings.json to Cloudflare R2
 upload-embeddings:
-	wrangler r2 object put resume-rag-assistant/dataset/v2/resume_embeddings.json \
-		--file data/resume_embeddings.json
+	$(WRANGLER) r2 object put resume-rag-assistant/dataset/v2/resume_embeddings.json \
+		--file data/resume_embeddings.json \
+		--remote
 
 # Clean generated Python/cache files
 clean:

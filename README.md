@@ -217,3 +217,29 @@ The make targets below use Wrangler and expect a configured Cloudflare environme
 make upload-chunks
 make upload-embeddings
 ```
+
+## Commands
+
+From project root:
+
+```bash
+# Install Python deps
+make i
+
+# Build pipeline end-to-end (local artifacts)
+make rag-build
+
+# Validate ingestion without OpenAI API call
+make rag-dry-run
+
+# Local quality checks
+make lc
+make check
+
+# Auto-fix lint + format
+make lf
+
+# Upload generated artifacts to R2
+make upload-chunks
+make upload-embeddings
+```
