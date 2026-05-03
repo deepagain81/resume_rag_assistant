@@ -9,16 +9,29 @@ export interface RetrievedChunk {
     content: string;
     score: number;
 }
+
+export interface ChunkMetadata {
+    source_file?: string;
+    section_path?: string[];
+}
+
 export interface ChunkRecord {
-    chunk_id: string;
-    source: string;
-    section?: string;
+    id: string;
     content: string;
+    metadata?: ChunkMetadata;
+}
+
+export interface ChunksFile {
+    chunks: ChunkRecord[];
 }
 
 export interface EmbeddingRecord {
     chunk_id: string;
     embedding: number[];
+}
+
+export interface EmbeddingsFile {
+    embeddings: EmbeddingRecord[];
 }
 
 export interface ApiResponse<T = unknown> {
