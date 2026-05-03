@@ -1,31 +1,78 @@
-.PHONY: i dev test lc format lf check clean
+.PHONY: i dev test lc format lf check chunks embeddings rag-build rag-dry-run upload-chunks upload-embeddings clean
 
+VENV_BIN := .venv/bin
+RUFF := $(if $(wildcard $(VENV_BIN)/ruff),$(VENV_BIN)/ruff,ruff)
+BLACK := $(if $(wildcard $(VENV_BIN)/black),$(VENV_BIN)/black,black)
+PYTEST := $(if $(wildcard $(VENV_BIN)/pytest),$(VENV_BIN)/pytest,pytest)
+WRANGLER := $(if $(wildcard worker/node_modules/.bin/wrangler),worker/node_modules/.bin/wrangler,wrangler)
+
+# Install Python dependencies
 i:
 	python -m pip install -r requirements.txt
 
-dev:
-	fastapi dev src/app/main.py
-
+# Run tests
 test:
-	pytest
+	$(PYTEST)
 
+# Lint check
 lc:
-	ruff check .
+	$(RUFF) check .
 
+# Format code
 format:
-	black .
+	$(BLACK) .
 
+# Lint fix + format
 lf:
-	ruff check . --fix
-	black .
+	$(RUFF) check . --fix
+	$(BLACK) .
 
+# Full local quality check
 check:
-	ruff check .
-	black --check .
-	pytest
+	$(RUFF) check .
+	$(BLACK) --check .
+	$(PYTEST)
 
+# Generate resume_chunks.json from canonical-profile.md
+chunks:
+	python scripts/build_chunks.py \
+		--input data/canonical-profile.md \
+		--output data/resume_chunks.json
+
+# Dry-run embedding generation without calling OpenAI
+rag-dry-run: chunks
+	python scripts/build_embeddings.py \
+		--input data/resume_chunks.json \
+		--output data/resume_embeddings.json \
+		--model text-embedding-3-small \
+		--dry-run
+
+# Generate resume_embeddings.json from resume_chunks.json
+embeddings: chunks
+	python scripts/build_embeddings.py \
+		--input data/resume_chunks.json \
+		--output data/resume_embeddings.json \
+		--model text-embedding-3-small
+
+# Full RAG build: canonical-profile.md -> resume_chunks.json -> resume_embeddings.json
+rag-build: chunks embeddings
+
+# Upload resume_chunks.json to Cloudflare R2
+upload-chunks:
+	$(WRANGLER) r2 object put resume-rag-assistant/dataset/v2/resume_chunks.json \
+		--file data/resume_chunks.json \
+		--remote
+
+# Upload resume_embeddings.json to Cloudflare R2
+upload-embeddings:
+	$(WRANGLER) r2 object put resume-rag-assistant/dataset/v2/resume_embeddings.json \
+		--file data/resume_embeddings.json \
+		--remote
+
+# Clean generated Python/cache files
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 	find . -type d -name ".ruff_cache" -exec rm -rf {} +
+	find . -type d -name ".mypy_cache" -exec rm -rf {} +

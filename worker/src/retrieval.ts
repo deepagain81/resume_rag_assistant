@@ -1,4 +1,4 @@
-import type { ChunkRecord, EmbeddingRecord, RetrievedChunk } from "./types";
+import type { ChunkRecord, ChunksFile, EmbeddingsFile, RetrievedChunk } from "./types";
 
 /* ============================================================================
  * Retrieval environment contract
@@ -114,21 +114,29 @@ export async function retrieveTopChunks(
     topK = 3,
 ): Promise<RetrievedChunk[]> {
     const scored: RetrievedChunk[] = [];
-    // Load the actual chunk content records from R2.
-    const chunks = await readJsonObject<ChunkRecord[]>(env.RESUME_BUCKET, env.CHUNKS_OBJECT_KEY);
+    // Load the pipeline chunk artifact from R2.
+    const chunksPayload = await readJsonObject<ChunksFile>(
+        env.RESUME_BUCKET,
+        env.CHUNKS_OBJECT_KEY,
+    );
 
-    // Load the precomputed embedding records from R2.
-    const embeddings = await readJsonObject<EmbeddingRecord[]>(
+    // Load the pipeline embedding artifact from R2.
+    const embeddingsPayload = await readJsonObject<EmbeddingsFile>(
         env.RESUME_BUCKET,
         env.EMBEDDINGS_OBJECT_KEY,
     );
+
+    const chunks = Array.isArray(chunksPayload.chunks) ? chunksPayload.chunks : [];
+    const embeddings = Array.isArray(embeddingsPayload.embeddings)
+        ? embeddingsPayload.embeddings
+        : [];
 
     // Build a fast lookup map so we can get chunk content by chunk_id
     // while iterating over the embedding records.
     const chunkMap = new Map<string, ChunkRecord>();
 
     for (const chunk of chunks) {
-        chunkMap.set(chunk.chunk_id, chunk);
+        chunkMap.set(chunk.id, chunk);
     }
 
     // Compare the query embedding to every stored chunk embedding.
@@ -147,9 +155,9 @@ export async function retrieveTopChunks(
 
         // Store the chunk plus its similarity score.
         scored.push({
-            chunkId: chunk.chunk_id,
-            source: chunk.source,
-            section: chunk.section,
+            chunkId: chunk.id,
+            source: chunk.metadata?.source_file ?? "canonical-profile.md",
+            section: chunk.metadata?.section_path?.join(" > "),
             content: chunk.content,
             score,
         });

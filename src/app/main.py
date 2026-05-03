@@ -1,33 +1,24 @@
-from typing import Annotated
+"""Lightweight project entrypoint for local sanity checks."""
 
-from fastapi import Depends, FastAPI
+from __future__ import annotations
 
-from app.config import Settings, get_settings
-from app.schemas import QueryRequest, QueryResponse
-from app.services.rag_service import RagService
-
-app = FastAPI()
-
-rag_service = RagService()
-
-# Dependency injection for settings
-SettingsDep = Annotated[Settings, Depends(get_settings)]
+from app.config import (
+    CANONICAL_PROFILE_PATH,
+    CHUNKS_PATH,
+    DEFAULT_EMBEDDING_MODEL,
+    EMBEDDINGS_PATH,
+)
 
 
-@app.get("/")
-def read_root(settings: SettingsDep) -> dict[str, str]:
-    return {
-        "msg": settings.app_name,
-        "v": settings.app_version,
-        "env": settings.app_env,
-    }
+def main() -> None:
+    """Print current project configuration."""
+
+    print("Resume RAG Assistant")
+    print(f"Canonical profile: {CANONICAL_PROFILE_PATH}")
+    print(f"Chunks output:      {CHUNKS_PATH}")
+    print(f"Embeddings output:  {EMBEDDINGS_PATH}")
+    print(f"Embedding model:    {DEFAULT_EMBEDDING_MODEL}")
 
 
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/query", response_model=QueryResponse)
-def query(payload: QueryRequest) -> QueryResponse:
-    return rag_service.answer_query(payload.question)
+if __name__ == "__main__":
+    main()
