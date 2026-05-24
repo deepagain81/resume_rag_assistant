@@ -5,7 +5,12 @@ export interface CacheEnv {
 }
 
 function normalizeQuestion(question: string): string {
-    return question.trim().toLowerCase().replace(/\s+/g, " ");
+    return question
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function buildCacheKey(question: string, datasetVersion: string): string {
