@@ -1,14 +1,27 @@
 import { getCachedResponse, putCachedResponse } from "./cache";
+import {
+    EmbeddingError,
+    GenerationError,
+    InvalidRequestBodyError,
+    MalformedJsonError,
+    RetrievalError,
+} from "./errors";
 import { buildAnswerPrompt } from "./prompts";
 import {
+    buildEmbeddingFailedResponse,
+    buildGenerationFailedResponse,
     buildInternalErrorResponse,
     buildInvalidRequestBodyResponse,
     buildMalformedJsonResponse,
     buildQuerySuccessResponse,
+    buildRetrievalFailedResponse,
     jsonResponse as buildApiJsonResponse,
 } from "./response";
+import { RETRIEVAL, URL_METHOD, URL_PATH } from "./constants";
 import { retrieveTopChunks } from "./retrieval";
 import { createOpenAIClient } from "./services";
+import { errorDetails, errorMessage, generateRequestId } from "./util";
+import type { CacheEnv } from "./cache";
 import type { QueryRequest, RetrievedChunk } from "./types";
 
 /* ============================================================================
@@ -31,13 +44,14 @@ export interface Env {
 
 /* ============================================================================
  * HTTP / CORS configuration
- * ============================================================================.
+ * ============================================================================
  */
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
+const TOP_K = 3;
 
 /* ============================================================================
  * Response helpers
@@ -74,13 +88,6 @@ function preflightResponse(): Response {
  */
 
 /**
- * Parses the incoming request body as JSON.
- */
-async function parseJsonBody(request: Request): Promise<unknown> {
-    return request.json();
-}
-
-/**
  * Runtime validation for the /api/query request body.
  * Ensures the payload contains a non-empty "question" string.
  */
@@ -93,6 +100,82 @@ function isValidQueryRequest(value: unknown): value is QueryRequest {
     return typeof maybeQuestion === "string" && maybeQuestion.trim().length > 0;
 }
 
+/**
+ * Parses the body and validates the expected query payload shape.
+ */
+async function parseAndValidateQuestion(request: Request): Promise<string> {
+    let body: unknown;
+
+    try {
+        body = await request.json();
+    } catch (cause) {
+        throw new MalformedJsonError({ cause });
+    }
+
+    // Todo - improve validation error (make specific)
+    if (!isValidQueryRequest(body)) {
+        throw new InvalidRequestBodyError({ field: "question" });
+    }
+
+    return body.question.trim();
+}
+
+/* ============================================================================
+ * Cache helpers
+ * ============================================================================
+ */
+
+/**
+ * Narrows the Worker env to the cache-specific contract.
+ */
+function getCacheEnv(env: Env): CacheEnv {
+    return {
+        QUERY_CACHE: env.QUERY_CACHE,
+        DATASET_VERSION: env.DATASET_VERSION,
+        CACHE_TTL_SECONDS: env.CACHE_TTL_SECONDS,
+    };
+}
+
+/**
+ * Writes query response cache asynchronously so response latency is not blocked.
+ */
+function cacheResponseInBackground(
+    ctx: ExecutionContext,
+    cacheEnv: CacheEnv,
+    question: string,
+    answer: string,
+): void {
+    ctx.waitUntil(
+        putCachedResponse(cacheEnv, question, answer).catch((_cause) => {
+            // log when cache write fails.
+        }),
+    );
+}
+
+/* ============================================================================
+ * Query workflow helpers
+ * ============================================================================
+ */
+
+/**
+ * Generates the query embedding and retrieves top matching chunks.
+ */
+async function retrieveRelevantChunks(env: Env, question: string): Promise<RetrievedChunk[]> {
+    let queryEmbedding: number[];
+
+    try {
+        queryEmbedding = await getQueryEmbedding(env, question);
+    } catch (cause) {
+        throw new EmbeddingError({ cause });
+    }
+
+    try {
+        return await retrieveTopChunks(env, queryEmbedding, TOP_K);
+    } catch (cause) {
+        throw new RetrievalError({ cause });
+    }
+}
+
 /* ============================================================================
  * Route handlers
  * ============================================================================
@@ -101,7 +184,7 @@ function isValidQueryRequest(value: unknown): value is QueryRequest {
 /**
  * Health endpoint - Useful for verifying that the Worker is live and reading config correctly.
  */
-async function handleHealth(env: Env): Promise<Response> {
+function handleHealth(env: Env): Response {
     return jsonResponse({
         status: "ok",
         datasetVersion: env.DATASET_VERSION,
@@ -112,112 +195,185 @@ async function handleHealth(env: Env): Promise<Response> {
  * Query endpoint - validates input, checks cache, generates a query embedding,
  * and returns a response.
  */
-async function handleQuery(env: Env, request: Request): Promise<Response> {
-    const requestId = crypto.randomUUID();
-    let body: unknown;
-    let retrievedChunks: RetrievedChunk[] = [];
+async function handleQuery(env: Env, request: Request, ctx: ExecutionContext): Promise<Response> {
+    const requestId = generateRequestId();
+    const cacheEnv = getCacheEnv(env);
+    let question = "";
 
     try {
-        body = await parseJsonBody(request);
-    } catch {
-        return buildApiJsonResponse(buildMalformedJsonResponse(requestId), 400);
-    }
+        question = await parseAndValidateQuestion(request);
+        const cachedResponse = await getCachedResponse(cacheEnv, question);
 
-    if (!isValidQueryRequest(body)) {
-        return buildApiJsonResponse(buildInvalidRequestBodyResponse({ requestId }), 422);
-    }
-    const question = body.question.trim();
-    const cachedResponse = await getCachedResponse(
-        {
-            QUERY_CACHE: env.QUERY_CACHE,
-            DATASET_VERSION: env.DATASET_VERSION,
-            CACHE_TTL_SECONDS: env.CACHE_TTL_SECONDS,
-        },
-        question,
-    );
-    if (cachedResponse) {
-        return buildApiJsonResponse(
-            buildQuerySuccessResponse({
+        if (cachedResponse) {
+            return buildSuccessQueryResponse(env, {
                 answer: cachedResponse,
                 cacheHit: true,
-                retrievedChunks,
-                requestId,
-                datasetVersion: env.DATASET_VERSION,
-                question,
-                model: env.CHAT_MODEL,
-            }),
-            200,
-        );
-    }
-    try {
-        const queryEmbedding = await getQueryEmbedding(env, question);
-        retrievedChunks = await retrieveTopChunks(env, queryEmbedding.embedding, 3);
-    } catch (_error) {
-        return buildApiJsonResponse(
-            buildInternalErrorResponse({
+                retrievedChunks: [],
                 requestId,
                 question,
-                datasetVersion: env.DATASET_VERSION,
-            }),
-            500,
-        );
-    }
+            });
+        }
 
-    try {
+        const retrievedChunks = await retrieveRelevantChunks(env, question);
         const prompt = buildAnswerPrompt(question, retrievedChunks);
         const answer = await getQueryAnswer(env, prompt);
-        await putCachedResponse(env, question, answer);
 
-        return buildApiJsonResponse(
-            buildQuerySuccessResponse({
-                answer,
-                cacheHit: false,
-                retrievedChunks,
-                requestId,
-                datasetVersion: env.DATASET_VERSION,
-                question,
-                model: env.CHAT_MODEL,
-            }),
-            200,
-        );
-    } catch (_error) {
-        return buildApiJsonResponse(
-            buildInternalErrorResponse({
-                requestId,
-                question,
-                datasetVersion: env.DATASET_VERSION,
-            }),
-            500,
-        );
+        cacheResponseInBackground(ctx, cacheEnv, question, answer);
+
+        return buildSuccessQueryResponse(env, {
+            answer,
+            cacheHit: false,
+            retrievedChunks,
+            requestId,
+            question,
+        });
+    } catch (error) {
+        return mapQueryErrorToResponse(error, {
+            requestId,
+            question,
+            datasetVersion: env.DATASET_VERSION,
+            model: env.CHAT_MODEL,
+        });
     }
 }
 
 /* ============================================================================
- * Query embedding workflow
+ * Query embedding + generation workflow
  * ========================================================================== */
 
-interface QueryEmbeddingResponse {
-    embeddingDimensions: number;
-    embedding: number[];
-}
-
-async function getQueryEmbedding(env: Env, question: string): Promise<QueryEmbeddingResponse> {
+/**
+ * Returns a single embedding vector for the incoming question.
+ */
+async function getQueryEmbedding(env: Env, question: string): Promise<number[]> {
     const client = getOpenAIClient(env);
-    const embedding = await client.embedQuery(question);
-
-    return {
-        embedding: embedding,
-        embeddingDimensions: embedding.length,
-    };
+    return client.embedQuery(question);
 }
 
+/**
+ * Returns answer text from the model and translates model failures.
+ */
 async function getQueryAnswer(env: Env, prompt: string): Promise<string> {
     const client = getOpenAIClient(env);
-    return client.generateAnswer(prompt);
+
+    try {
+        return await client.generateAnswer(prompt);
+    } catch (cause) {
+        throw new GenerationError({ cause });
+    }
 }
 
 /* ============================================================================
- * OpenAI Singleton client
+ * Error mapping helpers
+ * ============================================================================
+ */
+
+interface QueryErrorResponseContext {
+    requestId: string;
+    question?: string;
+    datasetVersion: string;
+    model: string;
+}
+
+function buildSuccessQueryResponse(
+    env: Env,
+    params: {
+        answer: string;
+        cacheHit: boolean;
+        retrievedChunks: RetrievedChunk[];
+        requestId: string;
+        question: string;
+    },
+): Response {
+    return buildApiJsonResponse(
+        buildQuerySuccessResponse({
+            answer: params.answer,
+            cacheHit: params.cacheHit,
+            retrievedChunks: params.retrievedChunks,
+            requestId: params.requestId,
+            datasetVersion: env.DATASET_VERSION,
+            question: params.question,
+            model: env.CHAT_MODEL,
+        }),
+        200,
+    );
+}
+
+/**
+ * Converts internal typed errors to stable API responses.
+ */
+function mapQueryErrorToResponse(error: unknown, context: QueryErrorResponseContext): Response {
+    const errType = error instanceof Error ? error.constructor : null;
+
+    switch (errType) {
+        case MalformedJsonError:
+            return buildApiJsonResponse(buildMalformedJsonResponse(context.requestId), 400);
+
+        case InvalidRequestBodyError: {
+            const typedError = error as InvalidRequestBodyError;
+            return buildApiJsonResponse(
+                buildInvalidRequestBodyResponse({
+                    requestId: context.requestId,
+                    field: typedError.field,
+                    details: typedError.message,
+                }),
+                422,
+            );
+        }
+
+        case EmbeddingError: {
+            const typedError = error as EmbeddingError;
+            return buildApiJsonResponse(
+                buildEmbeddingFailedResponse({
+                    requestId: context.requestId,
+                    question: context.question,
+                    details: errorDetails(typedError),
+                }),
+                502,
+            );
+        }
+
+        case RetrievalError: {
+            const typedError = error as RetrievalError;
+            return buildApiJsonResponse(
+                buildRetrievalFailedResponse({
+                    requestId: context.requestId,
+                    question: context.question,
+                    datasetVersion: context.datasetVersion,
+                    details: errorDetails(typedError),
+                }),
+                500,
+            );
+        }
+
+        case GenerationError: {
+            const typedError = error as GenerationError;
+            return buildApiJsonResponse(
+                buildGenerationFailedResponse({
+                    requestId: context.requestId,
+                    question: context.question,
+                    datasetVersion: context.datasetVersion,
+                    model: context.model,
+                    details: errorDetails(typedError),
+                }),
+                502,
+            );
+        }
+
+        default:
+            return buildApiJsonResponse(
+                buildInternalErrorResponse({
+                    requestId: context.requestId,
+                    question: context.question,
+                    datasetVersion: context.datasetVersion,
+                    details: errorMessage(error) ?? "An unexpected internal error occurred.",
+                }),
+                500,
+            );
+    }
+}
+
+/* ============================================================================
+ * OpenAI singleton client
  * ========================================================================== */
 
 let openAIClient: ReturnType<typeof createOpenAIClient> | null = null;
@@ -247,28 +403,26 @@ function getOpenAIClient(env: Env): ReturnType<typeof createOpenAIClient> {
  * - fallback 404
  */
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
-        if (request.method === "OPTIONS") {
-            return preflightResponse();
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+        if (request.method === URL_METHOD.options) {
+            return buildPreflightResponse();
         }
 
         const url = new URL(request.url);
         const routeKey = `${request.method} ${url.pathname}`;
 
         switch (routeKey) {
-            case "GET /":
-                return new Response("Great! Worker is running...", {
-                    headers: corsHeaders,
-                });
+            case `${URL_METHOD.get} ${URL_PATH.home}`:
+                return handleRoot();
 
-            case "GET /health":
+            case `${URL_METHOD.get} ${URL_PATH.health}`:
                 return handleHealth(env);
 
-            case "POST /api/query":
-                return handleQuery(env, request);
+            case `${URL_METHOD.post} ${URL_PATH.query}`:
+                return handleQuery(env, request, ctx);
 
             default:
-                return jsonResponse({ error: "Not found" }, 404);
+                return handleNotFound(env, routeKey);
         }
     },
 };

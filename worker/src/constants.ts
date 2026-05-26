@@ -10,3 +10,15 @@ export const URL_METHOD = {
     get: "GET",
     options: "OPTIONS",
 } as const;
+
+export const URL_PATH = {
+    home: "/",
+    query: "/api/query",
+    health: "/health",
+} as const;
+
+/** Retrieval tuning defaults used by query orchestration. */
+export const RETRIEVAL = {
+    TOP_K: 3,
+    MIN_SCORE: 0.3,
+} as const;

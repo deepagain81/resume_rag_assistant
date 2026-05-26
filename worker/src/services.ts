@@ -1,4 +1,5 @@
 import { OPENAI, URL_METHOD } from "./constants";
+import { errorMessage } from "./util";
 
 /* ============================================================================
  * Environment and client config
@@ -143,8 +144,8 @@ export class OpenAIClient {
                 model: this.chatModel,
                 input: prompt,
             });
-        } catch (_error) {
-            throw new Error("OpenAI API failed or Prompt building error.");
+        } catch (error: unknown) {
+            throw new Error(`Error in answer generation: ${errorMessage(error)}`);
         }
 
         const outputText = response.output[0].content[0].text;

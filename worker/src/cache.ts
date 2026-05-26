@@ -1,11 +1,9 @@
+import { normalizeQuestion, parsePositiveInteger } from "./util";
+
 export interface CacheEnv {
     QUERY_CACHE: KVNamespace;
     DATASET_VERSION: string;
-    CACHE_TTL_SECONDS: number;
-}
-
-function normalizeQuestion(question: string): string {
-    return question.trim().toLowerCase().replace(/\s+/g, " ");
+    CACHE_TTL_SECONDS: string;
 }
 
 export function buildCacheKey(question: string, datasetVersion: string): string {
