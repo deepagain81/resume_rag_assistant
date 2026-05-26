@@ -154,6 +154,82 @@ async function retrieveRelevantChunks(env: Env, question: string): Promise<Retri
     }
 }
 
+/**
+ * Parses the body and validates the expected query payload shape.
+ */
+async function parseAndValidateQuestion(request: Request): Promise<string> {
+    let body: unknown;
+
+    try {
+        body = await request.json();
+    } catch (cause) {
+        throw new MalformedJsonError({ cause });
+    }
+
+    // Todo - improve validation error (make specific)
+    if (!isValidQueryRequest(body)) {
+        throw new InvalidRequestBodyError({ field: "question" });
+    }
+
+    return body.question.trim();
+}
+
+/* ============================================================================
+ * Cache helpers
+ * ============================================================================
+ */
+
+/**
+ * Narrows the Worker env to the cache-specific contract.
+ */
+function getCacheEnv(env: Env): CacheEnv {
+    return {
+        QUERY_CACHE: env.QUERY_CACHE,
+        DATASET_VERSION: env.DATASET_VERSION,
+        CACHE_TTL_SECONDS: env.CACHE_TTL_SECONDS,
+    };
+}
+
+/**
+ * Writes query response cache asynchronously so response latency is not blocked.
+ */
+function cacheResponseInBackground(
+    ctx: ExecutionContext,
+    cacheEnv: CacheEnv,
+    question: string,
+    answer: string,
+): void {
+    ctx.waitUntil(
+        putCachedResponse(cacheEnv, question, answer).catch((_cause) => {
+            // log when cache write fails.
+        }),
+    );
+}
+
+/* ============================================================================
+ * Query workflow helpers
+ * ============================================================================
+ */
+
+/**
+ * Generates the query embedding and retrieves top matching chunks.
+ */
+async function retrieveRelevantChunks(env: Env, question: string): Promise<RetrievedChunk[]> {
+    let queryEmbedding: number[];
+
+    try {
+        queryEmbedding = await getQueryEmbedding(env, question);
+    } catch (cause) {
+        throw new EmbeddingError({ cause });
+    }
+
+    try {
+        return await retrieveTopChunks(env, queryEmbedding, TOP_K);
+    } catch (cause) {
+        throw new RetrievalError({ cause });
+    }
+}
+
 /* ============================================================================
  * Route handlers
  * ============================================================================
