@@ -17,8 +17,10 @@ import {
     buildRetrievalFailedResponse,
     jsonResponse as buildApiJsonResponse,
 } from "./response";
+import { RETRIEVAL, URL_METHOD, URL_PATH } from "./constants";
 import { retrieveTopChunks } from "./retrieval";
 import { createOpenAIClient } from "./services";
+import { errorDetails, errorMessage, generateRequestId } from "./util";
 import type { CacheEnv } from "./cache";
 import type { QueryRequest, RetrievedChunk } from "./types";
 
@@ -144,8 +146,8 @@ function cacheResponseInBackground(
     answer: string,
 ): void {
     ctx.waitUntil(
-        putCachedResponse(cacheEnv, question, answer).catch((cause) => {
-            //console.error("Failed to write query response cache", cause);
+        putCachedResponse(cacheEnv, question, answer).catch((_cause) => {
+            // log when cache write fails.
         }),
     );
 }
@@ -194,7 +196,7 @@ function handleHealth(env: Env): Response {
  * and returns a response.
  */
 async function handleQuery(env: Env, request: Request, ctx: ExecutionContext): Promise<Response> {
-    const requestId = crypto.randomUUID();
+    const requestId = generateRequestId();
     const cacheEnv = getCacheEnv(env);
     let question = "";
 
@@ -270,18 +272,6 @@ interface QueryErrorResponseContext {
     question?: string;
     datasetVersion: string;
     model: string;
-}
-
-function errorMessage(error: unknown): string | undefined {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-
-    return undefined;
-}
-
-function errorDetails(error: Error): string {
-    return errorMessage(error.cause) ?? error.message;
 }
 
 function buildSuccessQueryResponse(
@@ -414,27 +404,25 @@ function getOpenAIClient(env: Env): ReturnType<typeof createOpenAIClient> {
  */
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-        if (request.method === "OPTIONS") {
-            return preflightResponse();
+        if (request.method === URL_METHOD.options) {
+            return buildPreflightResponse();
         }
 
         const url = new URL(request.url);
         const routeKey = `${request.method} ${url.pathname}`;
 
         switch (routeKey) {
-            case "GET /":
-                return new Response("Great! Worker is running...", {
-                    headers: corsHeaders,
-                });
+            case `${URL_METHOD.get} ${URL_PATH.home}`:
+                return handleRoot();
 
-            case "GET /health":
+            case `${URL_METHOD.get} ${URL_PATH.health}`:
                 return handleHealth(env);
 
-            case "POST /api/query":
+            case `${URL_METHOD.post} ${URL_PATH.query}`:
                 return handleQuery(env, request, ctx);
 
             default:
-                return jsonResponse({ error: "Not found" }, 404);
+                return handleNotFound(env, routeKey);
         }
     },
 };

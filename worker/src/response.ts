@@ -9,9 +9,6 @@ import type {
     RetrievedChunk,
 } from "./types";
 
-function generateRequestId(): string {
-    return crypto.randomUUID();
-}
 
 export function buildMeta(input: BuildMetaInput = {}): ResponseMeta {
     return {
