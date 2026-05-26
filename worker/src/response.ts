@@ -10,7 +10,13 @@ import type {
 } from "./types";
 import { generateRequestId } from "./util";
 
+export const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+} as const;
 
+/** Builds common response metadata. */
 export function buildMeta(input: BuildMetaInput = {}): ResponseMeta {
     return {
         requestId: input.requestId ?? generateRequestId(),
@@ -22,6 +28,7 @@ export function buildMeta(input: BuildMetaInput = {}): ResponseMeta {
     };
 }
 
+/** Builds a successful API envelope. */
 export function buildSuccessResponse<T>(
     code: Extract<ResponseCode, "QUERY_SUCCESS" | "NO_RELEVANT_CONTEXT">,
     message: string,
@@ -38,6 +45,7 @@ export function buildSuccessResponse<T>(
     };
 }
 
+/** Builds an error API envelope. */
 export function buildErrorResponse(
     code: Exclude<ResponseCode, "QUERY_SUCCESS" | "NO_RELEVANT_CONTEXT">,
     message: string,
@@ -54,6 +62,7 @@ export function buildErrorResponse(
     };
 }
 
+/** Builds the standard query success response payload. */
 export function buildQuerySuccessResponse(params: {
     answer: string;
     cacheHit: boolean;
@@ -85,6 +94,50 @@ export function buildQuerySuccessResponse(params: {
     );
 }
 
+/** Builds a response envelope for queries with no relevant retrieved context. */
+export function buildNoRelevantContextResponse(params: {
+    requestId?: string;
+    datasetVersion?: string;
+    question?: string;
+    model?: string;
+}): ApiResponse<QueryResponseData> {
+    return buildSuccessResponse(
+        "NO_RELEVANT_CONTEXT",
+        "No relevant context found for the question.",
+        {
+            answer: "I do not have enough information to provide a confident answer. Please reach out to me through [email](https://www.deepakchapagain.com/#contact), and I would be happy to discuss further.",
+            cacheHit: false,
+        },
+        buildMeta({
+            requestId: params.requestId,
+            datasetVersion: params.datasetVersion,
+            question: params.question,
+            retrievedCount: 0,
+            model: params.model,
+        }),
+    );
+}
+
+/** Builds a health-check response envelope. */
+export function buildHealthResponse(params: {
+    datasetVersion: string;
+    requestId?: string;
+}): ApiResponse<{ status: "ok"; datasetVersion: string }> {
+    return buildSuccessResponse(
+        "QUERY_SUCCESS",
+        "Worker is healthy.",
+        {
+            status: "ok",
+            datasetVersion: params.datasetVersion,
+        },
+        buildMeta({
+            requestId: params.requestId,
+            datasetVersion: params.datasetVersion,
+        }),
+    );
+}
+
+/** Builds a malformed JSON error response envelope. */
 export function buildMalformedJsonResponse(requestId?: string): ApiResponse<null> {
     return buildErrorResponse(
         "MALFORMED_JSON",
@@ -98,6 +151,7 @@ export function buildMalformedJsonResponse(requestId?: string): ApiResponse<null
     );
 }
 
+/** Builds an invalid request body error response envelope. */
 export function buildInvalidRequestBodyResponse(params?: {
     requestId?: string;
     field?: string;
@@ -118,6 +172,7 @@ export function buildInvalidRequestBodyResponse(params?: {
     );
 }
 
+/** Builds an embedding failure response envelope. */
 export function buildEmbeddingFailedResponse(params?: {
     requestId?: string;
     question?: string;
@@ -138,6 +193,7 @@ export function buildEmbeddingFailedResponse(params?: {
     );
 }
 
+/** Builds a retrieval failure response envelope. */
 export function buildRetrievalFailedResponse(params?: {
     requestId?: string;
     question?: string;
@@ -160,6 +216,7 @@ export function buildRetrievalFailedResponse(params?: {
     );
 }
 
+/** Builds a generation failure response envelope. */
 export function buildGenerationFailedResponse(params?: {
     requestId?: string;
     question?: string;
@@ -184,6 +241,7 @@ export function buildGenerationFailedResponse(params?: {
     );
 }
 
+/** Builds an internal error response envelope. */
 export function buildInternalErrorResponse(params?: {
     requestId?: string;
     question?: string;
@@ -206,14 +264,42 @@ export function buildInternalErrorResponse(params?: {
     );
 }
 
+/** Builds a route-not-found error response envelope. */
+export function buildNotFoundResponse(params?: {
+    requestId?: string;
+    datasetVersion?: string;
+    routeKey?: string;
+}): ApiResponse<null> {
+    return buildErrorResponse(
+        "NOT_FOUND",
+        "Route not found.",
+        {
+            type: "client_error",
+            details: `Route not found: ${params?.routeKey}`,
+            retryable: false,
+        },
+        buildMeta({
+            requestId: params?.requestId,
+            datasetVersion: params?.datasetVersion,
+        }),
+    );
+}
+
+/** Builds the CORS preflight response. */
+export function buildPreflightResponse(): Response {
+    return new Response(null, {
+        status: 204,
+        headers: CORS_HEADERS,
+    });
+}
+
+/** Serializes an API envelope with standard JSON/CORS headers. */
 export function jsonResponse<T>(body: ApiResponse<T>, status = 200): Response {
     return new Response(JSON.stringify(body), {
         status,
         headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "content-type": "application/json; charset=utf-8",
+            ...CORS_HEADERS,
         },
     });
 }

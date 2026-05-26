@@ -6,6 +6,7 @@ export interface CacheEnv {
     CACHE_TTL_SECONDS: string;
 }
 
+/** Builds a dataset-aware cache key from a question string. */
 export function buildCacheKey(question: string, datasetVersion: string): string {
     return `query:${datasetVersion}:${normalizeQuestion(question)}`;
 }
@@ -27,6 +28,7 @@ export async function getCachedResponse(env: CacheEnv, question: string): Promis
     return cached as string;
 }
 
+/** Writes a cached answer for the given question. */
 export async function putCachedResponse(
     env: CacheEnv,
     question: string,
