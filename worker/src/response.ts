@@ -8,6 +8,7 @@ import type {
     ResponseMeta,
     RetrievedChunk,
 } from "./types";
+import { generateRequestId } from "./util";
 
 
 export function buildMeta(input: BuildMetaInput = {}): ResponseMeta {
@@ -64,7 +65,6 @@ export function buildQuerySuccessResponse(params: {
     model?: string;
 }): ApiResponse<QueryResponseData> {
     const retrievedCount = params.retrievedChunks.length;
-
     const meta = buildMeta({
         requestId: params.requestId,
         datasetVersion: params.datasetVersion,
@@ -74,10 +74,8 @@ export function buildQuerySuccessResponse(params: {
     });
 
     return buildSuccessResponse(
-        retrievedCount > 0 ? "QUERY_SUCCESS" : "NO_RELEVANT_CONTEXT",
-        retrievedCount > 0
-            ? "Query processed successfully."
-            : "Query processed successfully, but no relevant resume context was found.",
+        "QUERY_SUCCESS",
+        "Query processed successfully.",
         {
             answer: params.answer,
             cacheHit: params.cacheHit,

@@ -1,4 +1,10 @@
-import type { ChunkRecord, ChunksFile, EmbeddingsFile, RetrievedChunk } from "./types";
+import type {
+    ChunkRecord,
+    ChunksFile,
+    EmbeddingRecord,
+    EmbeddingsFile,
+    RetrievedChunk,
+} from "./types";
 
 /* ============================================================================
  * Retrieval environment contract
@@ -10,9 +16,28 @@ import type { ChunkRecord, ChunksFile, EmbeddingsFile, RetrievedChunk } from "./
  */
 export interface RetrievalEnv {
     RESUME_BUCKET: R2Bucket;
+    DATASET_VERSION: string;
     CHUNKS_OBJECT_KEY: string;
     EMBEDDINGS_OBJECT_KEY: string;
 }
+
+type RetrievalArtifacts = {
+    embeddings: EmbeddingRecord[];
+    chunkMap: Map<string, ChunkRecord>;
+};
+
+type RetrievalArtifactsCacheEntry = {
+    key: string;
+    value: RetrievalArtifacts;
+};
+
+type RetrievalArtifactsPendingEntry = {
+    key: string;
+    promise: Promise<RetrievalArtifacts>;
+};
+
+let retrievalArtifactsCache: RetrievalArtifactsCacheEntry | null = null;
+let retrievalArtifactsPending: RetrievalArtifactsPendingEntry | null = null;
 
 /* ============================================================================
  * Vector math helpers
@@ -88,72 +113,120 @@ async function readJsonObject<T>(bucket: R2Bucket, key: string): Promise<T> {
     return (await object.json()) as T;
 }
 
+/** Builds the cache key for currently configured artifact bindings. */
+function getArtifactsCacheKey(env: RetrievalEnv): string {
+    return [env.DATASET_VERSION, env.CHUNKS_OBJECT_KEY, env.EMBEDDINGS_OBJECT_KEY].join(":");
+}
+
+/** Loads and validates retrieval artifacts from R2. */
+async function fetchArtifactsFromR2(env: RetrievalEnv, key: string): Promise<RetrievalArtifacts> {
+    const [chunksPayload, embeddingsPayload] = await Promise.all([
+        readJsonObject<ChunksFile>(env.RESUME_BUCKET, env.CHUNKS_OBJECT_KEY),
+        readJsonObject<EmbeddingsFile>(env.RESUME_BUCKET, env.EMBEDDINGS_OBJECT_KEY),
+    ]);
+
+    validateArtifactsFile(chunksPayload, embeddingsPayload);
+    const chunkMap = buildChunkMap(chunksPayload.chunks);
+    const artifacts: RetrievalArtifacts = {
+        embeddings: embeddingsPayload.embeddings,
+        chunkMap,
+    };
+    retrievalArtifactsCache = { key, value: artifacts };
+    return artifacts;
+}
+
+/** Validates artifact shape before retrieval scoring. */
+function validateArtifactsFile(chunks: ChunksFile, embeddings: EmbeddingsFile): void {
+    if (!Array.isArray(chunks.chunks)) {
+        throw new Error("Invalid chunks artifact: expected `chunks` array.");
+    }
+
+    if (!Array.isArray(embeddings.embeddings)) {
+        throw new Error("Invalid embeddings artifact: expected `embeddings` array.");
+    }
+
+    if (chunks.chunks.length === 0) {
+        throw new Error("Invalid chunks artifact: `chunks` array is empty.");
+    }
+
+    if (embeddings.embeddings.length === 0) {
+        throw new Error("Invalid embeddings artifact: `embeddings` array is empty.");
+    }
+}
+
+/** Builds a chunk lookup map keyed by chunk id. */
+function buildChunkMap(chunks: ChunkRecord[]): Map<string, ChunkRecord> {
+    const chunkMap = new Map<string, ChunkRecord>();
+    for (const chunk of chunks) {
+        if (!chunk.id) {
+            throw new Error("Invalid chunks artifact: chunk is missing `id`.");
+        }
+        if (chunkMap.has(chunk.id)) {
+            throw new Error(`Invalid chunks artifact: duplicate chunk id \`${chunk.id}\`.`);
+        }
+        chunkMap.set(chunk.id, chunk);
+    }
+    return chunkMap;
+}
+
+/** Returns cached artifacts or performs a single in-flight load. */
+async function loadRetrievalArtifacts(env: RetrievalEnv): Promise<RetrievalArtifacts> {
+    const nextKey = getArtifactsCacheKey(env);
+
+    if (retrievalArtifactsCache?.key === nextKey) {
+        return retrievalArtifactsCache.value;
+    }
+
+    if (retrievalArtifactsPending?.key === nextKey) {
+        return retrievalArtifactsPending.promise;
+    }
+
+    const retrievalArtifactsPromise = fetchArtifactsFromR2(env, nextKey);
+    retrievalArtifactsPending = { key: nextKey, promise: retrievalArtifactsPromise };
+
+    try {
+        return await retrievalArtifactsPromise;
+    } finally {
+        if (retrievalArtifactsPending?.key === nextKey) {
+            retrievalArtifactsPending = null;
+        }
+    }
+}
+
 /* ============================================================================
  * Main retrieval flow
  * ============================================================================
- * Steps:
- * 1. Load chunk content from R2
- * 2. Load chunk embeddings from R2
- * 3. Build a lookup map from chunk_id -> chunk record
- * 4. Compare the query embedding against each stored chunk embedding
- * 5. Score all chunks using cosine similarity
- * 6. Sort by best score first
- * 7. Return the top K chunks
  */
 
 /**
- * Retrieves the top matching chunks for a given query embedding.
+ * Returns top-matching chunks for a query embedding.
  *
- * @param env - retrieval-specific environment bindings and object keys
- * @param queryEmbedding - embedding vector generated from the user's question
- * @param topK - maximum number of chunks to return
+ * @param env - retrieval bindings and artifact keys
+ * @param queryEmbedding - query embedding vector
+ * @param topK - max number of chunks to return
+ * @param minScore - minimum similarity threshold
  */
 export async function retrieveTopChunks(
     env: RetrievalEnv,
     queryEmbedding: number[],
-    topK = 3,
+    topK: number = 3,
+    minScore: number = 0.1,
 ): Promise<RetrievedChunk[]> {
     const scored: RetrievedChunk[] = [];
-    // Load the pipeline chunk artifact from R2.
-    const chunksPayload = await readJsonObject<ChunksFile>(
-        env.RESUME_BUCKET,
-        env.CHUNKS_OBJECT_KEY,
-    );
+    const artifacts = await loadRetrievalArtifacts(env);
 
-    // Load the pipeline embedding artifact from R2.
-    const embeddingsPayload = await readJsonObject<EmbeddingsFile>(
-        env.RESUME_BUCKET,
-        env.EMBEDDINGS_OBJECT_KEY,
-    );
+    for (const record of artifacts.embeddings) {
+        const chunk = artifacts.chunkMap.get(record.chunk_id);
 
-    const chunks = Array.isArray(chunksPayload.chunks) ? chunksPayload.chunks : [];
-    const embeddings = Array.isArray(embeddingsPayload.embeddings)
-        ? embeddingsPayload.embeddings
-        : [];
-
-    // Build a fast lookup map so we can get chunk content by chunk_id
-    // while iterating over the embedding records.
-    const chunkMap = new Map<string, ChunkRecord>();
-
-    for (const chunk of chunks) {
-        chunkMap.set(chunk.id, chunk);
-    }
-
-    // Compare the query embedding to every stored chunk embedding.
-    for (const record of embeddings) {
-        const chunk = chunkMap.get(record.chunk_id);
-
-        // This protects us from inconsistent or partial data files.
         if (!chunk) {
             continue;
         }
 
-        // Compute semantic similarity between:
-        // - the user's query embedding
-        // - the stored chunk embedding
         const score = cosineSimilarity(queryEmbedding, record.embedding);
+        if (score < minScore) {
+            continue;
+        }
 
-        // Store the chunk plus its similarity score.
         scored.push({
             chunkId: chunk.id,
             source: chunk.metadata?.source_file ?? "canonical-profile.md",
@@ -163,9 +236,6 @@ export async function retrieveTopChunks(
         });
     }
 
-    // Sort the scored chunks.
     scored.sort((left, right) => right.score - left.score);
-
-    // Return only the top K results.
     return scored.slice(0, topK);
 }

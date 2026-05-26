@@ -27,8 +27,17 @@ export class EmbeddingError extends QueryError {
 }
 
 export class RetrievalError extends QueryError {
-    constructor(options?: { cause?: unknown }) {
-        super("Failed to retrieve relevant context.", { cause: options?.cause });
+    readonly noRelevantContext: boolean;
+
+    constructor(options?: { cause?: unknown; noRelevantContext?: boolean }) {
+        const noRelevantContext = options?.noRelevantContext ?? false;
+        super(
+            noRelevantContext
+                ? "No relevant context found for the question."
+                : "Failed to retrieve relevant context.",
+            { cause: options?.cause },
+        );
+        this.noRelevantContext = noRelevantContext;
     }
 }
 

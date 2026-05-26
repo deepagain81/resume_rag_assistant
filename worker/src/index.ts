@@ -170,8 +170,22 @@ async function retrieveRelevantChunks(env: Env, question: string): Promise<Retri
     }
 
     try {
-        return await retrieveTopChunks(env, queryEmbedding, TOP_K);
+        const retrievedChunks = await retrieveTopChunks(
+            env,
+            queryEmbedding,
+            RETRIEVAL.TOP_K,
+            RETRIEVAL.MIN_SCORE,
+        );
+
+        if (retrievedChunks.length === 0) {
+            throw new RetrievalError({ noRelevantContext: true });
+        }
+
+        return retrievedChunks;
     } catch (cause) {
+        if (cause instanceof RetrievalError) {
+            throw cause;
+        }
         throw new RetrievalError({ cause });
     }
 }
