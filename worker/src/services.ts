@@ -85,6 +85,7 @@ interface OutputContentItem {
  * Factory
  * ========================================================================== */
 
+/** Creates an OpenAI client from Worker environment bindings. */
 export function createOpenAIClient(env: OpenAIEnv): OpenAIClient {
     return new OpenAIClient({
         apiKey: env.OPENAI_API_KEY,
@@ -103,6 +104,7 @@ export class OpenAIClient {
     private readonly chatModel: string;
     private readonly baseUrl: string;
 
+    /** Initializes the OpenAI client with resolved runtime config. */
     constructor(config: OpenAIClientConfig) {
         this.apiKey = config.apiKey;
         this.embeddingModel = config.embeddingModel;
@@ -213,10 +215,20 @@ export class OpenAIClient {
      */
     private async buildRequestError(response: Response): Promise<string> {
         const errorText = await response.text();
-        const parsed = JSON.parse(errorText) as OpenAIErrBody;
         const status = `${response.status} ${response.statusText}`;
-        const errCode = parsed.error?.code || "Unknown code";
+        let errCode = "Unknown code";
+        let errMessage = "Unknown error";
 
-        return `OpenAI request failed. status=${status} msg=${errCode}`;
+        try {
+            const parsed = JSON.parse(errorText) as OpenAIErrBody;
+            errCode = parsed.error?.code || errCode;
+            errMessage = parsed.error?.message || errMessage;
+        } catch {
+            if (errorText.trim().length > 0) {
+                errMessage = errorText.trim().slice(0, 200);
+            }
+        }
+
+        return `OpenAI request failed. status=${status} code=${errCode} msg=${errMessage}`;
     }
 }

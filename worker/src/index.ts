@@ -8,11 +8,16 @@ import {
 } from "./errors";
 import { buildAnswerPrompt } from "./prompts";
 import {
+    CORS_HEADERS,
+    buildPreflightResponse,
     buildEmbeddingFailedResponse,
     buildGenerationFailedResponse,
     buildInternalErrorResponse,
     buildInvalidRequestBodyResponse,
+    buildHealthResponse,
     buildMalformedJsonResponse,
+    buildNoRelevantContextResponse,
+    buildNotFoundResponse,
     buildQuerySuccessResponse,
     buildRetrievalFailedResponse,
     jsonResponse as buildApiJsonResponse,
@@ -35,51 +40,11 @@ export interface Env {
     RESUME_BUCKET: R2Bucket;
     OPENAI_API_KEY: string;
     DATASET_VERSION: string;
-    CACHE_TTL_SECONDS: number;
+    CACHE_TTL_SECONDS: string;
     CHUNKS_OBJECT_KEY: string;
     EMBEDDINGS_OBJECT_KEY: string;
     EMBEDDING_MODEL: string;
     CHAT_MODEL: string;
-}
-
-/* ============================================================================
- * HTTP / CORS configuration
- * ============================================================================
- */
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-const TOP_K = 3;
-
-/* ============================================================================
- * Response helpers
- * ============================================================================
- * These small helpers standardize API responses across the Worker.
- */
-
-/**
- * Returns a JSON response with the standard content type and CORS headers.
- */
-function jsonResponse(data: unknown, status = 200): Response {
-    return new Response(JSON.stringify(data), {
-        status,
-        headers: {
-            "content-type": "application/json; charset=utf-8",
-            ...corsHeaders,
-        },
-    });
-}
-
-/**
- * Returns a successful empty response for CORS preflight requests.
- */
-function preflightResponse(): Response {
-    return new Response(null, {
-        status: 204,
-        headers: corsHeaders,
-    });
 }
 
 /* ============================================================================
@@ -112,7 +77,6 @@ async function parseAndValidateQuestion(request: Request): Promise<string> {
         throw new MalformedJsonError({ cause });
     }
 
-    // Todo - improve validation error (make specific)
     if (!isValidQueryRequest(body)) {
         throw new InvalidRequestBodyError({ field: "question" });
     }
@@ -139,7 +103,7 @@ function getCacheEnv(env: Env): CacheEnv {
 /**
  * Writes query response cache asynchronously so response latency is not blocked.
  */
-function cacheResponseInBackground(
+function writeResponseInCache(
     ctx: ExecutionContext,
     cacheEnv: CacheEnv,
     question: string,
@@ -147,7 +111,7 @@ function cacheResponseInBackground(
 ): void {
     ctx.waitUntil(
         putCachedResponse(cacheEnv, question, answer).catch((_cause) => {
-            // log when cache write fails.
+            //Todo - log when cache write fails.
         }),
     );
 }
@@ -170,8 +134,22 @@ async function retrieveRelevantChunks(env: Env, question: string): Promise<Retri
     }
 
     try {
-        return await retrieveTopChunks(env, queryEmbedding, TOP_K);
+        const retrievedChunks = await retrieveTopChunks(
+            env,
+            queryEmbedding,
+            RETRIEVAL.TOP_K,
+            RETRIEVAL.MIN_SCORE,
+        );
+
+        if (retrievedChunks.length === 0) {
+            throw new RetrievalError({ noRelevantContext: true });
+        }
+
+        return retrievedChunks;
     } catch (cause) {
+        if (cause instanceof RetrievalError) {
+            throw cause;
+        }
         throw new RetrievalError({ cause });
     }
 }
@@ -181,14 +159,29 @@ async function retrieveRelevantChunks(env: Env, question: string): Promise<Retri
  * ============================================================================
  */
 
+/** Handles the root route response. */
+function handleRoot(): Response {
+    return new Response("Great! Worker is running...", {
+        headers: CORS_HEADERS,
+    });
+}
+
 /**
  * Health endpoint - Useful for verifying that the Worker is live and reading config correctly.
  */
 function handleHealth(env: Env): Response {
-    return jsonResponse({
-        status: "ok",
-        datasetVersion: env.DATASET_VERSION,
-    });
+    return buildApiJsonResponse(buildHealthResponse({ datasetVersion: env.DATASET_VERSION }), 200);
+}
+
+/** Builds a not-found response for unknown routes. */
+function handleNotFound(env: Env, routeKey: string): Response {
+    return buildApiJsonResponse(
+        buildNotFoundResponse({
+            datasetVersion: env.DATASET_VERSION,
+            routeKey,
+        }),
+        404,
+    );
 }
 
 /**
@@ -218,7 +211,7 @@ async function handleQuery(env: Env, request: Request, ctx: ExecutionContext): P
         const prompt = buildAnswerPrompt(question, retrievedChunks);
         const answer = await getQueryAnswer(env, prompt);
 
-        cacheResponseInBackground(ctx, cacheEnv, question, answer);
+        writeResponseInCache(ctx, cacheEnv, question, answer);
 
         return buildSuccessQueryResponse(env, {
             answer,
@@ -274,6 +267,7 @@ interface QueryErrorResponseContext {
     model: string;
 }
 
+/** Wraps query success payload into an HTTP JSON response. */
 function buildSuccessQueryResponse(
     env: Env,
     params: {
@@ -334,6 +328,17 @@ function mapQueryErrorToResponse(error: unknown, context: QueryErrorResponseCont
 
         case RetrievalError: {
             const typedError = error as RetrievalError;
+            if (typedError.noRelevantContext) {
+                return buildApiJsonResponse(
+                    buildNoRelevantContextResponse({
+                        requestId: context.requestId,
+                        question: context.question,
+                        datasetVersion: context.datasetVersion,
+                        model: context.model,
+                    }),
+                    200,
+                );
+            }
             return buildApiJsonResponse(
                 buildRetrievalFailedResponse({
                     requestId: context.requestId,
@@ -379,6 +384,7 @@ function mapQueryErrorToResponse(error: unknown, context: QueryErrorResponseCont
 let openAIClient: ReturnType<typeof createOpenAIClient> | null = null;
 let openAIClientKey: string | null = null;
 
+/** Returns a memoized OpenAI client for the current model/env settings. */
 function getOpenAIClient(env: Env): ReturnType<typeof createOpenAIClient> {
     const nextKey = `${env.OPENAI_API_KEY}:${env.EMBEDDING_MODEL}:${env.CHAT_MODEL}`;
 

@@ -1,5 +1,6 @@
 import type { RetrievedChunk } from "./types";
 
+/** Builds the final model prompt from question and retrieved context. */
 export function buildAnswerPrompt(question: string, retrievedChunks: RetrievedChunk[]): string {
     const context = retrievedChunks
         .map(

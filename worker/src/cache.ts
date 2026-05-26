@@ -6,10 +6,17 @@ export interface CacheEnv {
     CACHE_TTL_SECONDS: string;
 }
 
+/** Builds a dataset-aware cache key from a question string. */
 export function buildCacheKey(question: string, datasetVersion: string): string {
     return `query:${datasetVersion}:${normalizeQuestion(question)}`;
 }
 
+/** Parses and validates the configured cache TTL in seconds. */
+function parseCacheTtlSeconds(value: string): number {
+    return parsePositiveInteger(value, "CACHE_TTL_SECONDS");
+}
+
+/** Reads a cached answer for the given question. */
 export async function getCachedResponse(env: CacheEnv, question: string): Promise<string | null> {
     const key = buildCacheKey(question, env.DATASET_VERSION);
     const cached = await env.QUERY_CACHE.get(key, "json");
@@ -21,14 +28,16 @@ export async function getCachedResponse(env: CacheEnv, question: string): Promis
     return cached as string;
 }
 
+/** Writes a cached answer for the given question. */
 export async function putCachedResponse(
     env: CacheEnv,
     question: string,
     response: string,
 ): Promise<void> {
     const key = buildCacheKey(question, env.DATASET_VERSION);
+    const ttlSeconds = parseCacheTtlSeconds(env.CACHE_TTL_SECONDS);
 
     await env.QUERY_CACHE.put(key, JSON.stringify(response), {
-        expirationTtl: env.CACHE_TTL_SECONDS,
+        expirationTtl: ttlSeconds,
     });
 }

@@ -51,7 +51,8 @@ export type ResponseCode =
     | "EMBEDDING_FAILED"
     | "RETRIEVAL_FAILED"
     | "GENERATION_FAILED"
-    | "INTERNAL_ERROR";
+    | "INTERNAL_ERROR"
+    | "NOT_FOUND";
 
 export interface ApiError {
     type: ErrorType;
